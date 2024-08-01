@@ -64,13 +64,30 @@ Rect rectcut_cut(RectCut rectcut, int a) {
 
 struct UITheme
 {
-	Color button_color = {255,0,255,255};
+	Color button_color = {111,105,129,220};
     Color hot_color = {255,255,255,100};
     Color flash_color = {255,255,255,255};
     Color text_color = {255,255,255,255};
+    Color panel_color = {27,27,28,255};
+    Color label_bg_color = {180,24,20,255};
+    Color slider_handle_color = {82,65,90,124};
     int padding = 8;
 };
 
+/*
+    hook your drawing functions like this
+
+    UIRenderer renderer = {
+        sdl2_renderer,  // userdata
+        sdl2_draw_rect,
+        sdl2_draw_string,
+        sdl2_get_text_width,
+    };
+
+    and then pass that to UICore
+*/
+
+// this is graphics API agnostic library you have to implement these functions
 struct UIRenderer
 {
     void* userdata;
@@ -80,7 +97,12 @@ struct UIRenderer
     int (*get_text_height)(const char* string, void* userdata);
 };
 
-// inspired by https://www.youtube.com/watch?v=V_phHKr0yRY
+/*
+much help
+https://www.youtube.com/watch?v=V_phHKr0yRY
+https://solhsa.com/imgui/
+*/
+
 struct UICore
 {
     Vec2 mouse_pos = {0,0};
@@ -212,6 +234,54 @@ struct UICore
         return (clicked == id);
     }
 
+    bool combo_box(RectCut layout, const char* label, const char** options, int option_count, int& selected_index, bool& open)
+    {
+        Rect rect = rectcut_cut(layout, get_text_width(label) + (theme.padding * 2));
+        int id = next_id();
+
+        // Draw the combo box button
+        bool button_clicked = button_rect(rect);
+        
+        // Draw the selected option text
+        draw_string(options[selected_index], {rect.x + theme.padding, rect.y + int(rect.h/2) - int(get_text_height(options[selected_index])/2)}, theme.text_color);
+
+        // Draw the dropdown arrow
+        // Rect arrow_rect = {rect.x + rect.w - 20, rect.y, 20, rect.h};
+        // draw_rect(arrow_rect, theme.button_color);
+        // draw_string("V", {arrow_rect.x + 5, arrow_rect.y + int(arrow_rect.h/2) - int(get_text_height("▼")/2)}, theme.text_color);
+
+        // Check if the button was clicked to toggle the combo box open/close state
+        if (button_clicked)
+        {
+            open = !open;
+        }
+
+        bool option_clicked = false;
+
+        if (open)
+        {
+            // Render the options in the dropdown
+            for (int i = 0; i < option_count; ++i)
+            {
+                Rect option_rect = { rect.x, rect.y + rect.h * (i + 1), rect.w, rect.h };
+
+                // Check if an option is hovered or clicked
+                bool option_button_clicked = button_rect(option_rect);
+                draw_string(options[i], {option_rect.x + theme.padding, option_rect.y + int(option_rect.h/2) - int(get_text_height(options[i])/2)}, theme.text_color);
+
+                if (option_button_clicked)
+                {
+                    selected_index = i; // Set the selected index
+                    open = false; // Close the combo box after selection
+                    option_clicked = true;
+                    break;
+                }
+            }
+        }
+
+        return option_clicked;
+    }
+
     bool button(RectCut layout, const char* label)
     {
         float size = get_text_width(label) + (theme.padding*2);
@@ -222,6 +292,19 @@ struct UICore
         bool clicked = button_rect(rect);
         draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
         return clicked;
+    }
+
+    void label(RectCut layout, const char* label)
+    {
+        float size = get_text_width(label) + (theme.padding*2);
+        float text_height = get_text_height(label);
+        // Rect rect = cut_left(layout, size);
+        Rect rect = rectcut_cut(layout, size);
+
+        // draw_rect(rect, theme.label_bg_color);
+        
+        // bool clicked = button_rect(rect);
+        draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
     }
 
     bool vslider_rect(Rect rect, float &value, float min_value, float max_value, bool flip = false) {
@@ -278,49 +361,49 @@ struct UICore
         return (active == id && mouse_down);
     }
 
-    bool slider_rect(Rect rect, float &value, float min_value, float max_value) {
+    bool slider_rect(Rect rect, float *value, float min_value, float max_value) {
         int id = next_id();
         draw_rect(rect, {200, 200, 200, 100}); // Draw the slider track
-
+        
         if (region_hit(rect)) {
             next_hover = id;
         }
-
+        
         if (hover == id) {
             draw_rect(rect, {255, 255, 255, 100});
         }
-
+        
         if (active == id && mouse_down) {
             // Update value based on mouse position relative to the slider track
-            value = (float)(mouse_pos.x - rect.x) / (float)rect.w * (max_value - min_value) + min_value;
+            *value = (float)(mouse_pos.x - rect.x) / (float)rect.w * (max_value - min_value) + min_value;
             // Clamp value within the specified range
-            value = std::max(min_value, std::min(max_value, value));
+            *value = std::max(min_value, std::min(max_value, *value));
             next_hover = id; // Hold the hover state until release
-
+            
             draw_rect(rect, {0, 255, 0, 100});
         }
-
+        
         // Calculate handle position based on current value
         int handle_width = 20; // Width of the handle
-        int handle_x = rect.x + (int)((value - min_value) / (max_value - min_value) * (rect.w - handle_width));
+        int handle_x = rect.x + (int)((*value - min_value) / (max_value - min_value) * (rect.w - handle_width));
         Rect handle_rect = { handle_x, rect.y, handle_width, rect.h }; // Handle rect within slider track
-
-        draw_rect(handle_rect, {255, 0, 0, 100}); // Draw the slider handle
-
+        
+        draw_rect(handle_rect, theme.slider_handle_color); // Draw the slider handle
+        
         // Convert float value to string
         char value_str[16];
-        snprintf(value_str, sizeof(value_str), "%.2f", value);
-
+        snprintf(value_str, sizeof(value_str), "%.2f", *value);
+        
         // Calculate text dimensions
         int text_width = get_text_width(value_str);
         int text_height = get_text_height(value_str);
-
+        
         // Calculate text position to be in the middle of the slider
         Vec2 text_pos = { rect.x + (rect.w - text_width) / 2, rect.y + (rect.h - text_height) / 2 };
-
+        
         // Draw the slider value
         draw_string(value_str, text_pos, theme.text_color);
-
+        
         // return (clicked == id); // if you want it to return just one event
         return (active == id && mouse_down);
     }
