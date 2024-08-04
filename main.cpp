@@ -7,7 +7,7 @@
 Vec2 window_size = {800, 600};
 SDL_Renderer* sdl2_renderer;
 TTF_Font* font;
-UICore ui_core;
+// UICore ui_core;
 
 void sdl2_draw_rect(const Rect rect, const Color color, void* userdata) {
     SDL_Renderer* renderer = (SDL_Renderer*)userdata;
@@ -111,6 +111,13 @@ int sdl2_get_text_width(const char *string, void* userdata)
     return width;
 }
 
+void sdl2_render_clip(void* userdata, Rect *rect)
+{
+    SDL_Renderer* renderer = (SDL_Renderer*)userdata;
+    // SDL_Rect sdl_rect = {rect->x, rect->y, rect->w, rect->h};
+    SDL_RenderSetClipRect(renderer,(SDL_Rect*)rect);
+}
+
 void color_picker_sliders(Rect *layout, Color* color, const char* label)
 {
     Rect panel_column = cut_top(layout, 32);
@@ -198,16 +205,17 @@ void draw_ui()
   if(!hide_sidepanel)
     {
         Rect panel_left = cut_left(&layout, 256);
+        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
         
         static float scroll_y = 0;
 
-        Rect scrollbar_rect = get_right(&panel_left, 16);
+        // Rect scrollbar_rect = get_right(&panel_left, 16);
 
 
-        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
-        panel_left.y += scroll_y*-1;
+        // panel_left.y += scroll_y*-1;
 
-        overflow = true;
+        // overflow = true;
+        begin_scroll_area(&scroll_y, &panel_left);
 
         Rect panel_column = cut_top(&panel_left, 32);
         ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
@@ -227,24 +235,28 @@ void draw_ui()
         color_picker_sliders(&panel_left, &ui_core.theme.button_color, "button color");
         color_picker_sliders(&panel_left, &ui_core.theme.panel_color, "panel color");
         color_picker_sliders(&panel_left, &ui_core.theme.slider_handle_color, "slider handle color");
-        color_picker_sliders(&panel_left, &ui_core.theme.slider_color, "slider handle color");
+        color_picker_sliders(&panel_left, &ui_core.theme.slider_color, "slider  color");
+        color_picker_sliders(&panel_left, &ui_core.theme.hot_color, "hot color");
 
-        // print_rect(panel_left);
-        int scrollmax = 0;
-        if(panel_left.h<0)
-        {
+        // // print_rect(panel_left);
+        // int scrollmax = 0;
+        // if(panel_left.h<0)
+        // {
             
 
-            scrollmax = panel_left.h * -1;
-            if (scroll_y > scrollmax)
-            {
-                scroll_y = scrollmax;
-            }
-            ui_core.vslider_rect(scrollbar_rect, scroll_y, 0, scrollmax, false);
-        }
-            // cut_left(&panel_left,16);
+        //     scrollmax = panel_left.h * -1;
+        //     if (scroll_y > scrollmax)
+        //     {
+        //         scroll_y = scrollmax;
+        //     }
+        //     ui_core.vslider_rect(scrollbar_rect, scroll_y, 0, scrollmax, false);
+        // } else {
+        //     scroll_y = 0;
+        // }
+        //     // cut_left(&panel_left,16);
 
-        overflow = false;
+        // overflow = false;
+        end_scroll_area(&scroll_y, &panel_left);
     }
 
     if(!hide_sidepanel2)
@@ -256,37 +268,20 @@ void draw_ui()
 
         ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
 
+        static float scroll_y = 0;
+        begin_scroll_area(&scroll_y, &panel_left);
+
         Rect panel_column = cut_top(&panel_left, 32);
         ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
 
-        // // Rect panel_row = panel_left;
-        // for(int i = 0; i < 2; i++)
-        // {
-        //     // panel_row = add_top(&panel_row, 32);
-        //     // ui_core.draw_string("test", {panel_row.x, panel_row.y-32}, {255,255,255,255});
-        //     color_picker_sliders(&panel_left, &ui_core.theme.button_color, "button color");
-        //     // ui_core.button_rect(panel_row);
-        //     // ui_core.label(rectcut(&panel_row, RectCut_Left), "Label 1");
-        // }
+        for(int i=0; i<10; i++)
+        {
+            panel_column = cut_top(&panel_left, 32);
+            ui_core.button(rectcut(&panel_column, RectCut_Left), "test button");
+        }
 
-        // rectcut(&panel_left, RectAdd_Top)
-        // Rect rect = rectcut_cut(layout, size);
-        // ui_core.draw_rect
+        end_scroll_area(&scroll_y, &panel_left);
 
-        panel_column = cut_top(&panel_left, 32);
-        ui_core.button(rectcut(&panel_column, RectCut_Left), "test button");
-
-
-            // panel_column = add_top(&panel_column, 32);
-            // ui_core.label(rectcut(&panel_column, RectCut_Top), "test label");
-
-            // printf("%i%i\n",panel_column.y,panel_column.h);
-        // for(int i = 0; i < 8; i++)
-        // {
-        // }
-        // get_top(&panel_left, );
-
-        // printf("panel %i\n", panel_left.y);
     }
 
     ui_core.draw_string("left over space... example main content...", {layout.x, layout.y}, ui_core.theme.text_color);
@@ -364,6 +359,7 @@ int main()
         sdl2_draw_rect,
         sdl2_draw_string,
         sdl2_get_text_width,
+        sdl2_render_clip,
     };
 
     ui_core.init(renderer);

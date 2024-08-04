@@ -122,21 +122,11 @@ Rect rectcut_cut(RectCut rectcut, int a) {
     }
 }
 
-void begin_scrollable(float *scroll_y)
-{
-    overflow = true;
-}
-
-void end_scrollable()
-{
-    overflow = false;
-}
-
 struct UITheme
 {
 	Color button_color = {111,105,129,220};
     Color hot_color = {255,255,255,100};
-    Color flash_color = {255,255,255,255};
+    Color flash_color = {255,255,255,180};
     Color text_color = {255,255,255,255};
     Color panel_color = {27,27,28,255};
     Color label_bg_color = {180,24,20,255};
@@ -165,7 +155,8 @@ struct UIRenderer
     void (*draw_rect)(const Rect rect, const Color color, void* userdata);
     void (*draw_string)(const char* string, Vec2 pos, Color color, void* userdata);
     int (*get_text_width)(const char* string, void* userdata);
-    int (*get_text_height)(const char* string, void* userdata);
+    // int (*get_text_height)(const char* string, void* userdata);
+    void (*render_clip)(void* userdata, Rect *rect);
 };
 
 /*
@@ -398,7 +389,7 @@ struct UICore
         }
 
         if (hover == id) {
-            draw_rect(rect, {255, 255, 255, 100});
+            draw_rect(rect, theme.hot_color);
         }
 
         if (active == id && mouse_down) {
@@ -412,7 +403,7 @@ struct UICore
             value = std::max(min_value, std::min(max_value, value));
             next_hover = id; // Hold the hover state until release
 
-            draw_rect(rect, {0, 255, 0, 100});
+            draw_rect(rect, theme.flash_color);
         }
 
         // Calculate handle position based on current value
@@ -452,7 +443,7 @@ struct UICore
         }
         
         if (hover == id) {
-            draw_rect(rect, {255, 255, 255, 100});
+            draw_rect(rect, theme.hot_color);
         }
         
         if (active == id && mouse_down) {
@@ -462,7 +453,7 @@ struct UICore
             *value = std::max(min_value, std::min(max_value, *value));
             next_hover = id; // Hold the hover state until release
             
-            draw_rect(rect, {0, 255, 0, 100});
+            draw_rect(rect, theme.flash_color);
         }
         
         // Calculate handle position based on current value
@@ -490,3 +481,39 @@ struct UICore
         return (active == id && mouse_down);
     }
 };
+
+static UICore ui_core;
+
+static Rect scrollbar_rect = {0,0,0,0};
+
+void begin_scroll_area(float *scroll_y, Rect* area)
+{
+    ui_core.renderer.render_clip(ui_core.renderer.userdata, area);
+
+    overflow = true;
+    scrollbar_rect = get_right(area, 16);
+
+
+    area->y += *scroll_y *- 1;
+}
+
+void end_scroll_area(float *scroll_y, Rect* area)
+{
+            // print_rect(panel_left);
+    int scrollmax = 0;
+    if(area->h<0)
+    {
+        scrollmax = area->h * -1;
+        if (*scroll_y > scrollmax)
+        {
+            *scroll_y = scrollmax;
+        }
+        ui_core.vslider_rect(scrollbar_rect, *scroll_y, 0, scrollmax, false);
+    } else {
+        *scroll_y = 0;
+    }
+        // cut_left(&panel_left,16);
+
+    ui_core.renderer.render_clip(ui_core.renderer.userdata, NULL);
+    overflow = false;
+}
