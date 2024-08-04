@@ -3,7 +3,14 @@
 typedef uint64_t UIId;
 
 struct Vec2 { int x, y; };
-struct Rect { int x, y, w, h; };
+struct Rect { 
+    int x, y, w, h;
+};
+struct LayoutItem {
+    Rect rect;
+    bool overflow_x;
+    bool overflow_y;
+};
 struct Color { unsigned char r, g, b, a; };
 
 // https://web.archive.org/web/20210306102303/https://halt.software/dead-simple-layouts/
@@ -12,7 +19,8 @@ typedef enum {
     RectCut_Left,
     RectCut_Right,
     RectCut_Top,
-    RectCut_Bottom
+    RectCut_Bottom,
+    RectAdd_Top,
 } RectCutSide;
 
 typedef struct {
@@ -29,14 +37,23 @@ Rect cut_left(Rect* rect, int a) {
 }
 
 Rect cut_right(Rect* rect, int a) {
-    int w = std::min(a, rect->w);
+    // int w = std::min(a, rect->w);
+    int w = a;
     rect->w -= w;
     return {rect->x + rect->w, rect->y, w, rect->h};
 }
 
-Rect cut_top(Rect* rect, int a) {
+Rect cut_top(Rect* rect, int a, bool overflow = true) {
     int y = rect->y;
-    int h = std::min(a, rect->h);
+    int h;
+    
+    if(overflow)
+    {
+        h = a;
+    } else {
+        h = std::min(a, rect->h);
+    }
+
     rect->y += h;
     rect->h -= h;
     return {rect->x, y, rect->w, h};
@@ -46,6 +63,46 @@ Rect cut_bottom(Rect* rect, int a) {
     int h = std::min(a, rect->h);
     rect->h -= h;
     return {rect->x, rect->y + rect->h, rect->w, h};
+}
+
+// Get functions - same as cut, but keep input rect intact
+Rect get_left(const Rect* rect, int a) {
+    int w = (a < rect->w) ? a : rect->w;
+    return (Rect){ rect->x, rect->y, w, rect->h };
+}
+
+Rect get_right(const Rect* rect, int a) {
+    int w = (a < rect->w) ? a : rect->w;
+    return (Rect){ rect->x + rect->w - w, rect->y, w, rect->h };
+}
+
+Rect get_top(const Rect* rect, int a) {
+    int h = (a < rect->h) ? a : rect->h;
+    return (Rect){ rect->x, rect->y, rect->w, h };
+}
+
+Rect get_bottom(const Rect* rect, int a) {
+    int h = (a < rect->h) ? a : rect->h;
+    return (Rect){ rect->x, rect->y + rect->h - h, rect->w, h };
+}
+
+// Add functions - add rectangle outside of the input rectangle
+Rect add_left(const Rect* rect, int a) {
+    return (Rect){ rect->x - a, rect->y, a, rect->h };
+}
+
+Rect add_right(const Rect* rect, int a) {
+    return (Rect){ rect->x + rect->w, rect->y, a, rect->h };
+}
+
+Rect add_top(Rect* rect, int a) {
+    // rect->y += a;
+    // rect->h = a;
+    return (Rect){ rect->x, rect->y + a, rect->w, a };
+}
+
+Rect add_bottom(const Rect* rect, int a) {
+    return (Rect){ rect->x, rect->y + rect->h, rect->w, a };
 }
 
 RectCut rectcut(Rect* rect, RectCutSide side) {
@@ -58,6 +115,7 @@ Rect rectcut_cut(RectCut rectcut, int a) {
         case RectCut_Right:  return cut_right(rectcut.rect, a);
         case RectCut_Top:    return cut_top(rectcut.rect, a);
         case RectCut_Bottom: return cut_bottom(rectcut.rect, a);
+        case RectAdd_Top: return add_top(rectcut.rect, a);
         default: abort();
     }
 }
@@ -103,6 +161,8 @@ https://www.youtube.com/watch?v=V_phHKr0yRY
 https://solhsa.com/imgui/
 */
 
+#include <vector>
+
 struct UICore
 {
     Vec2 mouse_pos = {0,0};
@@ -115,8 +175,16 @@ struct UICore
     UIId clicked = 0;
     UIId active = 0;
 
+    struct StackItem {
+        Rect rect;
+        bool overflow;
+    };
+    std::vector<StackItem> rect_stack;
+    bool current_overflow;
+
     UIRenderer renderer;
     UITheme theme;
+
     // SDL_Renderer* renderer;
     // TTF_Font *font;
 
