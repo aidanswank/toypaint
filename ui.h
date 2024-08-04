@@ -6,6 +6,12 @@ struct Vec2 { int x, y; };
 struct Rect { 
     int x, y, w, h;
 };
+
+void print_rect(Rect rect)
+{
+    printf("x%i y%i w%i h%i\n", rect.x, rect.y, rect.w, rect.h);
+}
+
 // struct LayoutItem {
 //     Rect rect;
 //     bool overflow_x;
@@ -131,7 +137,7 @@ struct UITheme
     Color panel_color = {27,27,28,255};
     Color label_bg_color = {180,24,20,255};
     Color slider_handle_color = {82,65,90,124};
-    Color slider_color = {255,255,255,40};
+    Color slider_color = {255,255,255,14};
     int padding = 8;
 };
 
@@ -153,6 +159,7 @@ struct UIRenderer
 {
     void* userdata;
     void (*draw_rect)(const Rect rect, const Color color, void* userdata);
+    void (*draw_box)(Rect rect, Color color, void* userdata);
     void (*draw_string)(const char* string, Vec2 pos, Color color, void* userdata);
     int (*get_text_width)(const char* string, void* userdata);
     // int (*get_text_height)(const char* string, void* userdata);
@@ -171,7 +178,9 @@ struct UICore
 {
     Vec2 mouse_pos = {0,0};
     bool mouse_down = 0;
-    // int mouse_up_once = 0;
+    float scroll_delta = 0;
+    float scroll_input = 0;
+    float target_scroll_delta = 0;
     UIId id_counter = 0;
     UIId hover = 0;
     UIId next_hover = 0; // this is needed so we can detect a wiget above another one
@@ -223,6 +232,11 @@ struct UICore
         renderer.draw_rect(rect, color, renderer.userdata);
     }
 
+    void draw_box(Rect rect, Color color)
+    {
+        renderer.draw_box(rect, color, renderer.userdata);
+    }
+
     UIId next_id()
     {
         UIId id = id_counter;
@@ -248,6 +262,7 @@ struct UICore
 
     void new_frame()
     {
+
         overflow = false;
         // reset counts
         id_counter = 1;
@@ -374,7 +389,7 @@ struct UICore
         // Rect rect = cut_left(layout, size);
         Rect rect = rectcut_cut(layout, size);
 
-        // draw_rect(rect, theme.label_bg_color);
+        // draw_box(rect, {255,0,255,255});
         
         // bool clicked = button_rect(rect);
         draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
@@ -390,6 +405,20 @@ struct UICore
 
         if (hover == id) {
             draw_rect(rect, theme.hot_color);
+
+            // Convert float value to string
+            char value_str[16];
+            snprintf(value_str, sizeof(value_str), "%.2f", value);
+
+            // Calculate text dimensions
+            int text_width = get_text_width(value_str);
+            int text_height = get_text_height(value_str);
+
+            // Calculate text position to be in the middle of the slider
+            Vec2 text_pos = { rect.x + (rect.w - text_width) / 2, rect.y + (rect.h - text_height) / 2 };
+
+            // Draw the slider value
+            draw_string(value_str, text_pos, theme.text_color);
         }
 
         if (active == id && mouse_down) {
@@ -415,21 +444,7 @@ struct UICore
         int handle_y = rect.y + (int)(value_ratio * (rect.h - handle_height));
         Rect handle_rect = { rect.x, handle_y, rect.w, handle_height }; // Handle rect within slider track
 
-        draw_rect(handle_rect, {255, 0, 0, 100}); // Draw the slider handle
-
-        // Convert float value to string
-        char value_str[16];
-        snprintf(value_str, sizeof(value_str), "%.2f", value);
-
-        // Calculate text dimensions
-        int text_width = get_text_width(value_str);
-        int text_height = get_text_height(value_str);
-
-        // Calculate text position to be in the middle of the slider
-        Vec2 text_pos = { rect.x + (rect.w - text_width) / 2, rect.y + (rect.h - text_height) / 2 };
-
-        // Draw the slider value
-        draw_string(value_str, text_pos, theme.text_color);
+        draw_rect(handle_rect, theme.slider_handle_color); // Draw the slider handle
 
         return (active == id && mouse_down);
     }
@@ -488,32 +503,85 @@ static Rect scrollbar_rect = {0,0,0,0};
 
 void begin_scroll_area(float *scroll_y, Rect* area)
 {
+            float scroll_speed = 6.5f; // Adjust this to control scroll speed
+        float lerp_factor = 0.2f; // Adjust for smoother/more responsive scrolling
+        float friction = 0.65f; // Adjust for faster/slower deceleration
+
+        // Convert raw input to target scroll delta
+        if (std::abs(ui_core.scroll_input) > 0)
+        {
+            ui_core.target_scroll_delta += ui_core.scroll_input * scroll_speed;
+            ui_core.scroll_input = 0; // Reset the input
+        }
+
+        // Apply lerp to smooth the scrolling
+        ui_core.scroll_delta += (ui_core.target_scroll_delta - ui_core.scroll_delta) * lerp_factor;
+
+        // Apply friction to gradually slow down
+        ui_core.target_scroll_delta *= friction;
+
+        // Stop scrolling if speed is very low
+        if (std::abs(ui_core.target_scroll_delta) < 0.1f)
+        {
+            ui_core.target_scroll_delta = 0;
+        }
+
+        // If actual scroll is very close to target and target is very small, reset both
+        if (std::abs(ui_core.scroll_delta - ui_core.target_scroll_delta) < 0.1f && std::abs(ui_core.target_scroll_delta) < 0.1f)
+        {
+            ui_core.scroll_delta = 0;
+            ui_core.target_scroll_delta = 0;
+        }
+        
     ui_core.renderer.render_clip(ui_core.renderer.userdata, area);
+    // UIId id = ui_core.next_id();
+    // if (ui_core.hover == id) 
+    // {
+    //     ui_core.draw_rect(*area, {255,0,255,255});
+    //     // printf("yo\n");
+    // }
 
     overflow = true;
-    scrollbar_rect = get_right(area, 16);
+    scrollbar_rect = get_right(area, 18);
+    // scrollbar_rect = get_left(area, 18);
 
+    if(ui_core.region_hit(*area))
+    {
+        printf("yo\n");
+        print_rect(*area);
+        ui_core.draw_box(*area,{255,0,255,255});
+        *scroll_y -= ui_core.scroll_delta;
+    }
+
+    // printf("%f\n", *scroll_y);
+
+    // *scroll_y = std::abs(*scroll_y);
 
     area->y += *scroll_y *- 1;
 }
 
-void end_scroll_area(float *scroll_y, Rect* area)
-{
-            // print_rect(panel_left);
+void end_scroll_area(float *scroll_y, Rect* area) {
     int scrollmax = 0;
-    if(area->h<0)
+    if(area->h < 0)
     {
         scrollmax = area->h * -1;
-        if (*scroll_y > scrollmax)
-        {
-            *scroll_y = scrollmax;
-        }
-        ui_core.vslider_rect(scrollbar_rect, *scroll_y, 0, scrollmax, false);
+        
+        // Calculate the target scroll position
+        float target_scroll = std::min(std::max(*scroll_y, 0.0f), (float)scrollmax);
+        
+        // Lerp the scroll position
+        float lerp_factor = 0.1f; // Adjust this value to control the speed of the lerp
+        *scroll_y = *scroll_y + (target_scroll - *scroll_y) * lerp_factor;
+        
+        // print_rect(*area);
+        ui_core.vslider_rect(scrollbar_rect, *scroll_y, 0, scrollmax);
     } else {
-        *scroll_y = 0;
+        // If there's no scrolling needed, lerp back to 0
+        float lerp_factor = 0.1f;
+        *scroll_y = *scroll_y + (0 - *scroll_y) * lerp_factor;
     }
-        // cut_left(&panel_left,16);
 
     ui_core.renderer.render_clip(ui_core.renderer.userdata, NULL);
     overflow = false;
+    ui_core.scroll_delta = 0;
 }
