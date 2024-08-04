@@ -149,6 +149,12 @@ void color_picker_sliders(Rect *layout, Color* color, const char* label)
         color->a = (unsigned char)(alpha_slider_val);
     }
 }
+
+void print_rect(Rect rect)
+{
+    printf("x%i y%i w%i h%i\n", rect.x, rect.y, rect.w, rect.h);
+}
+
 void draw_ui() 
 {   
     SDL_RenderClear(sdl2_renderer);
@@ -189,9 +195,63 @@ void draw_ui()
     }
     ui_core.slider_rect(bottombar, &slider_val, 0, 32);
 
-    if(!hide_sidepanel2)
+  if(!hide_sidepanel)
     {
         Rect panel_left = cut_left(&layout, 256);
+        
+        static float scroll_y = 0;
+
+        Rect scrollbar_rect = get_right(&panel_left, 16);
+
+
+        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
+        panel_left.y += scroll_y*-1;
+
+        overflow = true;
+
+        Rect panel_column = cut_top(&panel_left, 32);
+        ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
+
+        static float slider_val2 = 0;
+        if(ui_core.slider_rect(panel_column, &slider_val2, 0, 32))
+        {
+            printf("slider changed %f\n", slider_val2);
+        }
+
+        panel_column = cut_top(&panel_left, 32);
+        ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 2");
+
+        static float slider_val3 = 0;
+        ui_core.slider_rect(panel_column, &slider_val3, 0, 32);
+
+        color_picker_sliders(&panel_left, &ui_core.theme.button_color, "button color");
+        color_picker_sliders(&panel_left, &ui_core.theme.panel_color, "panel color");
+        color_picker_sliders(&panel_left, &ui_core.theme.slider_handle_color, "slider handle color");
+        color_picker_sliders(&panel_left, &ui_core.theme.slider_color, "slider handle color");
+
+        // print_rect(panel_left);
+        int scrollmax = 0;
+        if(panel_left.h<0)
+        {
+            
+
+            scrollmax = panel_left.h * -1;
+            if (scroll_y > scrollmax)
+            {
+                scroll_y = scrollmax;
+            }
+            ui_core.vslider_rect(scrollbar_rect, scroll_y, 0, scrollmax, false);
+        }
+            // cut_left(&panel_left,16);
+
+        overflow = false;
+    }
+
+    if(!hide_sidepanel2)
+    {
+        // Rect panel_left = cut_left(&layout, 256);
+
+        Rect panel_left = cut_bottom(&layout, 256);
         // Rect temp = panel_left;
 
         ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
@@ -227,51 +287,6 @@ void draw_ui()
         // get_top(&panel_left, );
 
         // printf("panel %i\n", panel_left.y);
-    }
-
-    if(!hide_sidepanel)
-    {
-        Rect panel_left = cut_left(&layout, 256);
-        Rect temp = panel_left;
-
-        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
-
-        Rect panel_column = cut_top(&panel_left, 32);
-        ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
-
-        static float slider_val2 = 0;
-        if(ui_core.slider_rect(panel_column, &slider_val2, 0, 32))
-        {
-            printf("slider changed %f\n", slider_val2);
-        }
-
-        panel_column = cut_top(&panel_left, 32);
-        ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 2");
-
-        static float slider_val3 = 0;
-        ui_core.slider_rect(panel_column, &slider_val3, 0, 32);
-
-        color_picker_sliders(&panel_left, &ui_core.theme.button_color, "button color");
-        color_picker_sliders(&panel_left, &ui_core.theme.panel_color, "panel color");
-        color_picker_sliders(&panel_left, &ui_core.theme.slider_handle_color, "slider handle color");
-
-        // printf("panel %i %i %i %i\n", panel_left.x, panel_left.y, panel_left.w, panel_left.h );
-        // printf("temp %i %i %i %i\n", temp.x, temp.y, temp.w, temp.h );
-
-        // ui_core.draw_rect(panel_left, {255,0,255,255});
-
-        // panel_left = cut_top(&panel_left, 16);
-        panel_left = add_top(&panel_left, 16);
-        ui_core.label(rectcut(&panel_left, RectCut_Top), "test label");
-
-        // int content_size = panel_left.x;
-
-        // printf("overflow %i\n", panel_left.y - temp.h);
-        // if(panel_left.h == 0)
-        // {
-        //     // printf("overflow\n");
-        //     printf("overflow %i\n", panel_left.y - temp.h);
-        // }
     }
 
     ui_core.draw_string("left over space... example main content...", {layout.x, layout.y}, ui_core.theme.text_color);

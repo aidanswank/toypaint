@@ -6,11 +6,11 @@ struct Vec2 { int x, y; };
 struct Rect { 
     int x, y, w, h;
 };
-struct LayoutItem {
-    Rect rect;
-    bool overflow_x;
-    bool overflow_y;
-};
+// struct LayoutItem {
+//     Rect rect;
+//     bool overflow_x;
+//     bool overflow_y;
+// };
 struct Color { unsigned char r, g, b, a; };
 
 // https://web.archive.org/web/20210306102303/https://halt.software/dead-simple-layouts/
@@ -43,7 +43,9 @@ Rect cut_right(Rect* rect, int a) {
     return {rect->x + rect->w, rect->y, w, rect->h};
 }
 
-Rect cut_top(Rect* rect, int a, bool overflow = true) {
+static bool overflow = false;
+
+Rect cut_top(Rect* rect, int a) {
     int y = rect->y;
     int h;
     
@@ -120,6 +122,16 @@ Rect rectcut_cut(RectCut rectcut, int a) {
     }
 }
 
+void begin_scrollable(float *scroll_y)
+{
+    overflow = true;
+}
+
+void end_scrollable()
+{
+    overflow = false;
+}
+
 struct UITheme
 {
 	Color button_color = {111,105,129,220};
@@ -129,6 +141,7 @@ struct UITheme
     Color panel_color = {27,27,28,255};
     Color label_bg_color = {180,24,20,255};
     Color slider_handle_color = {82,65,90,124};
+    Color slider_color = {255,255,255,40};
     int padding = 8;
 };
 
@@ -244,6 +257,7 @@ struct UICore
 
     void new_frame()
     {
+        overflow = false;
         // reset counts
         id_counter = 1;
         hover = next_hover;
@@ -377,7 +391,7 @@ struct UICore
 
     bool vslider_rect(Rect rect, float &value, float min_value, float max_value, bool flip = false) {
         int id = next_id();
-        draw_rect(rect, {200, 200, 200, 255}); // Draw the slider track
+        draw_rect(rect, theme.slider_color);
 
         if (region_hit(rect)) {
             next_hover = id;
@@ -431,7 +445,7 @@ struct UICore
 
     bool slider_rect(Rect rect, float *value, float min_value, float max_value) {
         int id = next_id();
-        draw_rect(rect, {200, 200, 200, 100}); // Draw the slider track
+        draw_rect(rect, theme.slider_color);
         
         if (region_hit(rect)) {
             next_hover = id;
