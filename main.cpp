@@ -192,18 +192,16 @@ void draw_ui()
 
     Rect bottombar = cut_bottom(&layout, 32);
 
-    ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
-
     static float slider_val = 0;
     if(is_playing)
     {
         slider_val += 0.1;
     }
-    ui_core.slider_rect(bottombar, &slider_val, 0, 32);
 
   if(!hide_sidepanel)
     {
-        Rect panel_left = cut_left(&layout, 256);
+        // Rect panel_left = cut_left(&layout, 256);
+        Rect panel_left = resizable_panel(&layout, 256, &hide_sidepanel);
         ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
         
         static float scroll_y = 0;
@@ -275,7 +273,7 @@ void draw_ui()
 
         color_picker_sliders(&panel_left, &ui_core.theme.hot_color, "hot color");
 
-        for(int i=0; i<10; i++)
+        for(int i=0; i<20; i++)
         {
             panel_column = cut_top(&panel_left, 32);
             ui_core.button(rectcut(&panel_column, RectCut_Left), "test button");
@@ -312,6 +310,9 @@ void draw_ui()
         hide_sidepanel2 = !hide_sidepanel2;
         printf("panel tog %i\n", hide_sidepanel);
     }
+
+    ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
+    ui_core.slider_rect(bottombar, &slider_val, 0, 32);
 
     SDL_RenderPresent(sdl2_renderer);
 }

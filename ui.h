@@ -188,13 +188,6 @@ struct UICore
     UIId clicked = 0;
     UIId active = 0;
 
-    struct StackItem {
-        Rect rect;
-        bool overflow;
-    };
-    std::vector<StackItem> rect_stack;
-    bool current_overflow;
-
     UIRenderer renderer;
     UITheme theme;
 
@@ -418,10 +411,10 @@ struct UICore
             Vec2 text_pos = { rect.x + (rect.w - text_width) / 2, rect.y + (rect.h - text_height) / 2 };
 
             // Draw the slider value
-            draw_string(value_str, text_pos, theme.text_color);
+            // draw_string(value_str, text_pos, theme.text_color);
         }
 
-        if (active == id && mouse_down) {
+        if (active == id && mouse_down) { // might not need mouse down
             // Update value based on mouse position relative to the slider track
             float mouse_ratio = (float)(mouse_pos.y - rect.y) / (float)rect.h;
             if (flip) {
@@ -430,7 +423,7 @@ struct UICore
             value = mouse_ratio * (max_value - min_value) + min_value;
             // Clamp value within the specified range
             value = std::max(min_value, std::min(max_value, value));
-            next_hover = id; // Hold the hover state until release
+            // next_hover = id; // Hold the hover state until release
 
             draw_rect(rect, theme.flash_color);
         }
@@ -445,6 +438,7 @@ struct UICore
         Rect handle_rect = { rect.x, handle_y, rect.w, handle_height }; // Handle rect within slider track
 
         draw_rect(handle_rect, theme.slider_handle_color); // Draw the slider handle
+        // draw_box(rect, {255,255,255,100});
 
         return (active == id && mouse_down);
     }
@@ -499,59 +493,121 @@ struct UICore
 
 static UICore ui_core;
 
+Rect resizable_panel(Rect* layout, int default_width, bool* hide_sidepanel) {
+    static int panel_width = default_width;
+    static bool is_resizing = false;
+    static int resize_start_x = 0;
+
+    if (*hide_sidepanel) {
+        return Rect{0, 0, 0, 0}; // Return empty rect if panel is hidden
+    }
+
+    Rect panel_left = cut_left(layout, panel_width);
+    Rect resize_handle = add_right(&panel_left, 8); // 4 pixels wide resize handle
+
+    int id = ui_core.next_id();
+
+    ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+
+    if (ui_core.region_hit(resize_handle)) {
+        ui_core.next_hover = id;
+        ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+        if (!is_resizing) {
+            resize_start_x = ui_core.mouse_pos.x;
+            is_resizing = true;
+            ui_core.draw_rect(resize_handle, {0, 100, 0, 255}); 
+        }
+    }
+
+    if (ui_core.active == id && is_resizing) {
+        ui_core.next_hover = id;
+        int delta = ui_core.mouse_pos.x - resize_start_x;
+        panel_width = std::max(panel_width + delta, 100); // Minimum width of 100
+        resize_start_x = ui_core.mouse_pos.x;
+
+        // Adjust layout width
+        layout->x += delta;
+        layout->w -= delta;
+    }
+
+    if (!ui_core.mouse_down) {
+        is_resizing = false;
+    }
+
+    // Draw resize handle
+
+    return panel_left;
+}
+
 static Rect scrollbar_rect = {0,0,0,0};
 
 void begin_scroll_area(float *scroll_y, Rect* area)
 {
-            float scroll_speed = 6.5f; // Adjust this to control scroll speed
-        float lerp_factor = 0.2f; // Adjust for smoother/more responsive scrolling
-        float friction = 0.65f; // Adjust for faster/slower deceleration
+    float scroll_speed = 7.5; // Adjust this to control scroll speed
+    float lerp_factor = 0.2f; // Adjust for smoother/more responsive scrolling
+    float friction = 0.9; // Adjust for faster/slower deceleration
 
-        // Convert raw input to target scroll delta
-        if (std::abs(ui_core.scroll_input) > 0)
-        {
-            ui_core.target_scroll_delta += ui_core.scroll_input * scroll_speed;
-            ui_core.scroll_input = 0; // Reset the input
-        }
+    // Convert raw input to target scroll delta
+    if (std::abs(ui_core.scroll_input) > 0)
+    {
+        ui_core.target_scroll_delta += ui_core.scroll_input * scroll_speed;
+        ui_core.scroll_input = 0; // Reset the input
+    }
 
-        // Apply lerp to smooth the scrolling
-        ui_core.scroll_delta += (ui_core.target_scroll_delta - ui_core.scroll_delta) * lerp_factor;
+    // Apply lerp to smooth the scrolling
+    ui_core.scroll_delta += (ui_core.target_scroll_delta - ui_core.scroll_delta) * lerp_factor;
 
-        // Apply friction to gradually slow down
-        ui_core.target_scroll_delta *= friction;
+    // Apply friction to gradually slow down
+    ui_core.target_scroll_delta *= friction;
 
-        // Stop scrolling if speed is very low
-        if (std::abs(ui_core.target_scroll_delta) < 0.1f)
-        {
-            ui_core.target_scroll_delta = 0;
-        }
+    // Stop scrolling if speed is very low
+    if (std::abs(ui_core.target_scroll_delta) < 0.1f)
+    {
+        ui_core.target_scroll_delta = 0;
+    }
 
-        // If actual scroll is very close to target and target is very small, reset both
-        if (std::abs(ui_core.scroll_delta - ui_core.target_scroll_delta) < 0.1f && std::abs(ui_core.target_scroll_delta) < 0.1f)
-        {
-            ui_core.scroll_delta = 0;
-            ui_core.target_scroll_delta = 0;
-        }
+    // If actual scroll is very close to target and target is very small, reset both
+    if (std::abs(ui_core.scroll_delta - ui_core.target_scroll_delta) < 0.1f && std::abs(ui_core.target_scroll_delta) < 0.1f)
+    {
+        ui_core.scroll_delta = 0;
+        ui_core.target_scroll_delta = 0;
+    }
         
-    ui_core.renderer.render_clip(ui_core.renderer.userdata, area);
-    // UIId id = ui_core.next_id();
-    // if (ui_core.hover == id) 
-    // {
-    //     ui_core.draw_rect(*area, {255,0,255,255});
-    //     // printf("yo\n");
-    // }
 
+    ui_core.renderer.render_clip(ui_core.renderer.userdata, area);
     overflow = true;
-    scrollbar_rect = get_right(area, 18);
-    // scrollbar_rect = get_left(area, 18);
+    scrollbar_rect = cut_right(area, 18);
+    // Rect resize_handle = add_right(&scrollbar_rect, 18);
 
     if(ui_core.region_hit(*area))
     {
-        printf("yo\n");
-        print_rect(*area);
+        // printf("yo\n");
+        // print_rect(*area);
         ui_core.draw_box(*area,{255,0,255,255});
+        // ui_core.draw_box(resize_handle,{255,0,255,255});
+        // ui_core.scroll_delta = 0;
         *scroll_y -= ui_core.scroll_delta;
     }
+
+    // int id = ui_core.next_id();
+    // if(ui_core.region_hit(resize_handle))
+    // {
+
+    //     ui_core.next_hover = id;
+    //     // area->x //
+    //     ui_core.draw_box(*area,{0,0,255,255});
+    // }
+
+    // if(ui_core.active == id)
+    // {
+    //     ui_core.next_hover = id;
+    //     printf("drag me %i\n", ui_core.mouse_pos.x);
+
+    //     // do something with *area
+    //     ui_core.draw_box(resize_handle,{255,255,255,255});
+    //     ui_core.draw_box(*area,{0,0,255,255});
+    // }
+
 
     // printf("%f\n", *scroll_y);
 
