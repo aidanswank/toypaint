@@ -170,12 +170,63 @@ bool labeled_slider(Rect *parent_rect, const char* label_str, float *value, floa
     return ui_core.slider_rect(panel_row, value, min_value, max_value);
 }
 
-// Set the width and height of the canvas
-const int canvas_width = 320;
-const int canvas_height = 240;
+#include <stdio.h>
+#include <stdlib.h>
 
-// Initialize the bitmap to white
-static Color bitmap[canvas_width * canvas_height];
+#define MAX_CANVAS 100000
+
+struct AppState
+{
+    // Set the width and height of the canvas
+    int canvas_width = 320;
+    int canvas_height = 240;
+
+    Color bitmap[320*240];
+};
+
+// Serialization
+bool serialize_app_state(const AppState* state, const char* filename) {
+    FILE* file = fopen(filename, "wb");
+    if (file == NULL) {
+        return false;
+    }
+    size_t written = fwrite(state, sizeof(AppState), 1, file);
+    fclose(file);
+    return (written == 1);
+}
+
+// Deserialization
+AppState* deserialize_app_state(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (file == NULL) {
+        return NULL;
+    }
+
+    AppState* state = static_cast<AppState*>(malloc(sizeof(AppState)));
+    if (state == NULL) {
+        fclose(file);
+        return NULL;  // Memory allocation failed
+    }
+
+    size_t read_elements = fread(state, sizeof(AppState), 1, file);
+    fclose(file);
+
+    if (read_elements != 1) {
+        free(state);
+        return NULL;  // Read failed
+    }
+
+    return state;
+}
+
+static AppState app_state;
+
+void app_init()
+{
+    for (int i = 0; i < app_state.canvas_width * app_state.canvas_height; ++i) {
+        app_state.bitmap[i] = {255, 255, 255, 255}; // White color
+    }
+}
 
 void draw_line(Color* bitmap, int canvas_width, int canvas_height, int x0, int y0, int x1, int y1, Color color) {
     int dx = std::abs(x1 - x0);
@@ -221,48 +272,12 @@ void draw_ui()
     static bool hide_sidepanel = false;
     static bool hide_sidepanel2 = false;
     static bool hide_canvas_tools = false;
+    static bool hide_canvas_settings = true;
 
-    if(!hide_toolbar)
-    {
-        Rect toolbar = cut_top(&layout, 32);
+    Rect toolbar = cut_top(&layout, 32);
 
-        ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
+    ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
 
-        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Theme"))
-        {
-            hide_sidepanel = !hide_sidepanel;
-            printf("button 1 %i\n", hide_sidepanel);
-        }
-
-       if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Tools"))
-        {
-            hide_canvas_tools = !hide_canvas_tools;
-            printf("tools %i\n", hide_canvas_tools);
-        }
-
-        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Frames"))
-        {
-            hide_sidepanel2 = !hide_sidepanel2;
-            printf("panel tog %i\n", hide_sidepanel2);
-        }
-
-        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
-        {
-            printf("button 2\n");
-        }
-
-        if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Play"))
-        {
-            is_playing = !is_playing;
-            printf("button 3\n");
-        }
-
-        // if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Hide"))
-        // {
-        //     hide_toolbar = !hide_toolbar;
-        //     printf("hide toolbar\n");
-        // }
-    }
     // Rect toolbar = cut_top(&layout, 32);
 
     // ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
@@ -278,12 +293,19 @@ void draw_ui()
     //     printf("button 3\n");
     // }
 
-    Rect bottombar = cut_bottom(&layout, 32);
+    // Rect bottombar = cut_bottom(&layout, 32);
 
-    static float slider_val = 0;
-    if(is_playing)
+    // static float slider_val = 0;
+    // if(is_playing)
+    // {
+    //     slider_val += 0.1;
+    // }
+
+    if(!hide_canvas_settings)
     {
-        slider_val += 0.1;
+        Rect canvas_settings_rect = cut_top(&layout, 128);
+        ui_core.draw_box(canvas_settings_rect, {255, 255, 0, 255});
+        ui_core.label_rect(canvas_settings_rect, "todo add canvas settings");
     }
 
     if(!hide_sidepanel)
@@ -291,7 +313,7 @@ void draw_ui()
         // Rect panel_left = cut_left(&layout, 256);
         static int panel_width = 256;
         static int resize_start = 0;
-        Rect panel_left = resizable_panel(rectcut(&layout, RectCut_Left), &panel_width, &hide_sidepanel);
+        Rect panel_left = resizable_panel(rectcut(&layout, RectCut_Right), &panel_width, &hide_sidepanel);
         ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
         
         static float scroll_y = 0;
@@ -346,7 +368,7 @@ void draw_ui()
         end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
-        if(!hide_sidepanel2)
+    if(!hide_sidepanel2)
     {
         // Rect panel_left = cut_left(&layout, 256);
 
@@ -359,6 +381,20 @@ void draw_ui()
 
         ui_core.draw_rect(panel_rect, ui_core.theme.panel_color);
 
+        Rect frame_settings_rect = cut_top(&panel_rect, 32);
+        // ui_core.draw_box(frame_settings_rect, {255,255,0,255});
+        ui_core.button(rectcut(&frame_settings_rect, RectCut_Left), "Play");
+        ui_core.button(rectcut(&frame_settings_rect, RectCut_Left), "Stop");
+        static int num_frames = 1;
+        if(ui_core.button(rectcut(&frame_settings_rect, RectCut_Left), "Add Frame"))
+        {
+            num_frames++;
+        }
+        if(ui_core.button(rectcut(&frame_settings_rect, RectCut_Left), "Remove Frame"))
+        {
+            num_frames--;
+        }
+
         static float scroll_y = 0;
         static float scroll_x = 0;
         begin_scroll_area(&scroll_x, NULL, &panel_rect);
@@ -368,11 +404,11 @@ void draw_ui()
 
         // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
         // panel_rect = cut_top(&panel_rect, 32);
-        for(int i = 0; i < 16; i++)
+        for(int i = 0; i < num_frames; i++)
         {
             Rect square = cut_left(&panel_rect, 100);
             ui_core.button_rect(square);
-            ui_core.draw_box(square, {255,255,0,255});
+            // ui_core.draw_box(square, {255,255,0,255});
             ui_core.label_rect(square, "frame %i", i);
             // ui_core.label_rect()
             // ui_core.button(rectcut(&panel_rect, RectCut_Left), "test button");
@@ -404,7 +440,7 @@ void draw_ui()
 
     static Color color_pick1 = {0, 0, 0, 255}; // black color default
     static float zoom_slider_val = 1;
-    
+
     if(!hide_canvas_tools)
     {
         static int canvas_tools_width = 256;
@@ -429,6 +465,7 @@ void draw_ui()
         if(labeled_slider(&panel_left, "zoom", &zoom_slider_val, 1, 5))
         {
             printf("slider changed %f\n", zoom_slider_val);
+            zoom_slider_val = (int)zoom_slider_val;
         }
 
         static float brush_size = 1;
@@ -443,75 +480,139 @@ void draw_ui()
         end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
-    // main content area
+// main content area
+{
+    static float scroll_y = 0;
+    static float scroll_x = 0;
+    static bool is_drawing = false; // Flag to track if a stroke is in progress
+    begin_scroll_area(&scroll_x, &scroll_y, &layout);
+
+    int zoomed_canvas_width = static_cast<int>(app_state.canvas_width * zoom_slider_val);
+    int zoomed_canvas_height = static_cast<int>(app_state.canvas_height * zoom_slider_val);
+
+    Rect canvas_rect = {
+        layout.x,
+        layout.y,
+        zoomed_canvas_width,
+        zoomed_canvas_height
+    };
+
+    cut_corner(&layout, zoomed_canvas_width, zoomed_canvas_height);
+
+    static int last_mouse_x = -1, last_mouse_y = -1;
+    int relative_mouse_x = (ui_core.mouse_pos.x - canvas_rect.x) / zoom_slider_val;
+    int relative_mouse_y = (ui_core.mouse_pos.y - canvas_rect.y) / zoom_slider_val;
+
+    if(ui_core.active == 0) // check if any other widget is NOT active
     {
-        static float scroll_y = 0;
-        static float scroll_x = 0;
-        begin_scroll_area(&scroll_x, &scroll_y, &layout);
-
-        // Center the canvas_rect inside the layout rect
-        Rect canvas_rect = {
-            layout.x + (layout.w - canvas_width) / 2,
-            layout.y + (layout.h - canvas_height) / 2,
-            canvas_width,
-            canvas_height
-        };
-
-        printf("mouse %i %i\n", ui_core.mouse_pos.x, ui_core.mouse_pos.y);
-        printf("mouse down %i\n", ui_core.mouse_down); // boolean
-
-        // Get the relative mouse position inside the canvas_rect
-        static int last_mouse_x = -1, last_mouse_y = -1;
-        int relative_mouse_x = ui_core.mouse_pos.x - canvas_rect.x;
-        int relative_mouse_y = ui_core.mouse_pos.y - canvas_rect.y;
-
-        printf("relative mouse inside canvas %i %i\n", relative_mouse_x, relative_mouse_y);
-
-        // Check if the mouse is inside the canvas and if the mouse button is down
-        if (relative_mouse_x >= 0 && relative_mouse_x < canvas_width &&
-            relative_mouse_y >= 0 && relative_mouse_y < canvas_height &&
-            ui_core.mouse_down) {
+        if (relative_mouse_x >= 0 && relative_mouse_x < app_state.canvas_width &&
+            relative_mouse_y >= 0 && relative_mouse_y < app_state.canvas_height) 
+        {
+            if (ui_core.mouse_down && !is_drawing) {
+                // Start of stroke
+                is_drawing = true;
+                last_mouse_x = relative_mouse_x;
+                last_mouse_y = relative_mouse_y;
+            } 
             
-            // Draw a line between the last and current mouse positions
-            if (last_mouse_x != -1 && last_mouse_y != -1) {
-                draw_line(bitmap, canvas_width, canvas_height, last_mouse_x, last_mouse_y, relative_mouse_x, relative_mouse_y, color_pick1); // Red line
+            if (ui_core.mouse_down && is_drawing) {
+                // Stroke in progress
+                draw_line(app_state.bitmap, app_state.canvas_width, app_state.canvas_height, 
+                          last_mouse_x, last_mouse_y, relative_mouse_x, relative_mouse_y, color_pick1);
+                
+                last_mouse_x = relative_mouse_x;
+                last_mouse_y = relative_mouse_y;
             }
+        }
 
-            // Update the last mouse position
-            last_mouse_x = relative_mouse_x;
-            last_mouse_y = relative_mouse_y;
-        } else {
-            // Reset the last mouse position when the mouse button is released
+        if (!ui_core.mouse_down && is_drawing) {
+            // End of stroke
+            is_drawing = false;
             last_mouse_x = -1;
             last_mouse_y = -1;
+            printf("end\n");  // Print "end" when the stroke stops
         }
-
-        // Render the bitmap as a grid of rectangles
-        for (int y = 0; y < canvas_height; y++) {
-            for (int x = 0; x < canvas_width; x++) {
-                int pixel_index = y * canvas_width + x;
-                Rect pixel_rect = {
-                    canvas_rect.x + x,
-                    canvas_rect.y + y,
-                    1, 1
-                };
-                ui_core.draw_rect(pixel_rect, bitmap[pixel_index]);
-            }
-        }
-
-        // Rect canvas_edit_bar = add_top(&layout, 40);
-        // Rect canvas_edit_bar2 = add_top(&canvas_edit_bar, 40);
-        // ui_core.draw_box(canvas_edit_bar2, {255,255,0,255});
-
-        // Rect zoom_rect = cut_left(&layout, 256);
-        // static float zoom_slider_val = 0;
-        // ui_core.slider_rect(zoom_rect, &zoom_slider_val, 0, 100);
-
-        end_scroll_area(&scroll_x, &scroll_y, &layout);
     }
 
-    ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
-    ui_core.slider_rect(bottombar, &slider_val, 0, 32);
+    // Render the bitmap as a grid of zoomed rectangles
+    for (int y = 0; y < app_state.canvas_height; y++) {
+        for (int x = 0; x < app_state.canvas_width; x++) {
+            int pixel_index = y * app_state.canvas_width + x;
+            Rect pixel_rect = {
+                canvas_rect.x + static_cast<int>(x * zoom_slider_val),
+                canvas_rect.y + static_cast<int>(y * zoom_slider_val),
+                static_cast<int>(zoom_slider_val),
+                static_cast<int>(zoom_slider_val)
+            };
+
+            ui_core.draw_rect(pixel_rect, app_state.bitmap[pixel_index]);
+        }
+    }
+
+    end_scroll_area(&scroll_x, &scroll_y, &layout);
+}
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Theme"))
+    {
+        hide_sidepanel = !hide_sidepanel;
+        printf("button 1 %i\n", hide_sidepanel);
+    }
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Tools"))
+    {
+        hide_canvas_tools = !hide_canvas_tools;
+        printf("tools %i\n", hide_canvas_tools);
+    }
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Save"))
+    {
+        // Serialization
+        if (!serialize_app_state(&app_state, "app_state.bin")) {
+            // Handle error
+            printf("app failed to save!!!!\n");
+        } else {
+            printf("app saved!\n");
+        }
+    }
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Load"))
+    {
+        // Deserialization
+        AppState* restored_state = deserialize_app_state("app_state.bin");
+        if (restored_state != NULL) {
+            // Use restored_state
+            // app_state = restored_state;
+            memcpy(&app_state, restored_state, sizeof(AppState));
+            printf("loaded save state\n");
+            printf("loaded canvas height %i\n", restored_state->canvas_height);
+            printf("loaded canvas width %i\n", restored_state->canvas_width);
+            free(restored_state);  // Don't forget to free the allocated memory
+        } else {
+            // Handle error
+            printf("failed to load state\n");
+        }
+    }
+
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Settings"))
+    {
+        printf("button 2\n");
+        hide_canvas_settings = !hide_canvas_settings;
+    }
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Frames"))
+    {
+        hide_sidepanel2 = !hide_sidepanel2;
+        printf("panel tog %i\n", hide_sidepanel2);
+    }
+
+    // if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Play"))
+    // {
+    //     is_playing = !is_playing;
+    //     printf("button 3\n");
+    // }
+    // ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
+    // ui_core.slider_rect(bottombar, &slider_val, 0, 32);
 
     SDL_RenderPresent(sdl2_renderer);
 }
@@ -565,9 +666,7 @@ int main()
         sdl2_render_clip,
     };
 
-    for (int i = 0; i < canvas_width * canvas_height; ++i) {
-        bitmap[i] = {255, 255, 255, 255}; // White color
-    }
+    app_init();
 
     ui_core.init(renderer);
 
@@ -593,7 +692,7 @@ int main()
                     }
                     else if (event.wheel.y < 0)
                     {
-                        // Scrolled down
+                        // Scrolled downserialize_app_state
                         // printf("Scrolled down\n");
                         ui_core.scroll_input += event.wheel.y;
                     }

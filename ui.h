@@ -364,6 +364,11 @@ struct UICore
         int id = next_id();
         draw_rect(rect, theme.button_color);
 
+        // if(active != 0) // 
+        // {
+        //     return 0;
+        // }
+
         if(region_hit(rect))
         {
             next_hover = id;
@@ -379,6 +384,7 @@ struct UICore
             draw_rect(rect, theme.flash_color);
         }
 
+        // hover = -1;
         return (clicked == id);
     }
 
@@ -742,7 +748,7 @@ Rect resizable_panel(RectCut layout, int* panel_size, bool* hide_sidepanel) {
         // ui_core.draw_rect(resize_handle, {100, 0, 100, 255});
 
         if (!is_resizing) {
-            last_mouse_pos = (layout.side == RectCut_Left) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
+            last_mouse_pos = ((layout.side == RectCut_Left) || (layout.side == RectCut_Right)) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
             is_resizing = true;
             // ui_core.draw_rect(resize_handle, {180, 180, 180, 255});
             ui_core.draw_box(resize_handle, {180, 180, 180, 255});
@@ -752,7 +758,7 @@ Rect resizable_panel(RectCut layout, int* panel_size, bool* hide_sidepanel) {
     if (ui_core.active == id && is_resizing) {
         ui_core.next_hover = id;
 
-        int current_mouse_pos = (layout.side == RectCut_Left) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
+        int current_mouse_pos = ((layout.side == RectCut_Left) || (layout.side == RectCut_Right)) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
         int delta = current_mouse_pos - last_mouse_pos;
 
         if (layout.side == RectCut_Left) {
@@ -761,6 +767,8 @@ Rect resizable_panel(RectCut layout, int* panel_size, bool* hide_sidepanel) {
             *panel_size = std::max(*panel_size - delta, 100); // Minimum height of 100
         } else if (layout.side == (RectCut_Top)) {
             *panel_size = std::max(*panel_size + delta, 100); // Minimum height of 100
+        } else if (layout.side == (RectCut_Right)) {
+            *panel_size = std::max(*panel_size - delta, 100); // Minimum width of 100
         }
 
         last_mouse_pos = current_mouse_pos;
