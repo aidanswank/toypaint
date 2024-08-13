@@ -473,6 +473,24 @@ struct UICore
         draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
     }
 
+    void label_rect(Rect rect, const char* format, ...)
+    {
+        char label[256];
+        va_list args;
+        va_start(args, format);
+        vsprintf(label, format, args);
+        va_end(args);
+
+        float size = get_text_width(label) + (theme.padding * 2);
+        float text_height = get_text_height(label);
+        // Rect rect = rectcut_cut(layout, size);
+
+        // draw_box(rect, {255, 0, 255, 255});
+        
+        // bool clicked = button_rect(rect);
+        draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
+    }
+
     bool vslider_rect(Rect rect, float &value, float min_value, float max_value, bool flip = false) {
         int id = next_id();
         draw_rect(rect, theme.slider_color);
@@ -806,19 +824,19 @@ void begin_scroll_area(float *scroll_x, float *scroll_y, Rect* area)
     }
     // Rect resize_handle = add_right(&scrollbar_vert_rect, 18);
 
-    // finger drag scroll
-    if(ui_core.region_hit(*area))
-    {
-        // printf("yo\n");
-        // print_rect(*area);
-        ui_core.draw_box(*area,{255,0,255,255});
-        // ui_core.draw_box(resize_handle,{255,0,255,255});
-        // ui_core.scroll_delta = 0;
-        *scroll_y -= ui_core.scroll_delta;
-    }
 
     if(scroll_y)
     {
+        // finger drag scroll
+        if(ui_core.region_hit(*area))
+        {
+            // printf("yo\n");
+            // print_rect(*area);
+            ui_core.draw_box(*area,{255,0,255,255});
+            // ui_core.draw_box(resize_handle,{255,0,255,255});
+            // ui_core.scroll_delta = 0;
+            *scroll_y -= ui_core.scroll_delta;
+        }
         area->y += *scroll_y *- 1;
     }
 
@@ -829,25 +847,29 @@ void begin_scroll_area(float *scroll_x, float *scroll_y, Rect* area)
 }
 
 void end_scroll_area(float *scroll_x, float *scroll_y, Rect* area) {
-    int scrollmax_vert = 0;
-    // printf("area->h %i\n", area->h);
-    if(area->h < 0)
+
+    if(scroll_y)
     {
-        scrollmax_vert = area->h * -1;
-        
-        // Calculate the target scroll position
-        float target_scroll = std::min(std::max(*scroll_y, 0.0f), (float)scrollmax_vert);
-        
-        // Lerp the scroll position
-        float lerp_factor = 0.1f; // Adjust this value to control the speed of the lerp
-        *scroll_y = *scroll_y + (target_scroll - *scroll_y) * lerp_factor;
-        
-        // print_rect(*area);
-        ui_core.vslider_rect(scrollbar_vert_rect, *scroll_y, 0, scrollmax_vert);
-    } else {
-        // If there's no scrolling needed, lerp back to 0
-        float lerp_factor = 0.1f;
-        *scroll_y = *scroll_y + (0 - *scroll_y) * lerp_factor;
+        int scrollmax_vert = 0;
+        // printf("area->h %i\n", area->h);
+        if(area->h < 0)
+        {
+            scrollmax_vert = area->h * -1;
+            
+            // Calculate the target scroll position
+            float target_scroll = std::min(std::max(*scroll_y, 0.0f), (float)scrollmax_vert);
+            
+            // Lerp the scroll position
+            float lerp_factor = 0.1f; // Adjust this value to control the speed of the lerp
+            *scroll_y = *scroll_y + (target_scroll - *scroll_y) * lerp_factor;
+            
+            // print_rect(*area);
+            ui_core.vslider_rect(scrollbar_vert_rect, *scroll_y, 0, scrollmax_vert);
+        } else {
+            // If there's no scrolling needed, lerp back to 0
+            float lerp_factor = 0.1f;
+            *scroll_y = *scroll_y + (0 - *scroll_y) * lerp_factor;
+        }
     }
 
     if(scroll_x)

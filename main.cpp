@@ -161,6 +161,47 @@ void color_picker_sliders(Rect *layout, Color* color, const char* label)
     }
 }
 
+
+bool labeled_slider(Rect *parent_rect, const char* label_str, float *value, float min_value, float max_value)
+{
+    Rect panel_row = cut_top(parent_rect, 32);
+    ui_core.label(rectcut(&panel_row, RectCut_Left), label_str);
+
+    return ui_core.slider_rect(panel_row, value, min_value, max_value);
+}
+
+// Set the width and height of the canvas
+const int canvas_width = 320;
+const int canvas_height = 240;
+
+// Initialize the bitmap to white
+static Color bitmap[canvas_width * canvas_height];
+
+void draw_line(Color* bitmap, int canvas_width, int canvas_height, int x0, int y0, int x1, int y1, Color color) {
+    int dx = std::abs(x1 - x0);
+    int dy = std::abs(y1 - y0);
+    int sx = (x0 < x1) ? 1 : -1;
+    int sy = (y0 < y1) ? 1 : -1;
+    int err = dx - dy;
+
+    while (true) {
+        if (x0 >= 0 && x0 < canvas_width && y0 >= 0 && y0 < canvas_height) {
+            int pixel_index = y0 * canvas_width + x0;
+            bitmap[pixel_index] = color;
+        }
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = err * 2;
+        if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
 void draw_ui() 
 {   
     SDL_RenderClear(sdl2_renderer);
@@ -179,6 +220,7 @@ void draw_ui()
     static bool is_playing = false;
     static bool hide_sidepanel = false;
     static bool hide_sidepanel2 = false;
+    static bool hide_canvas_tools = false;
 
     if(!hide_toolbar)
     {
@@ -192,10 +234,16 @@ void draw_ui()
             printf("button 1 %i\n", hide_sidepanel);
         }
 
-        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Console"))
+       if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Tools"))
+        {
+            hide_canvas_tools = !hide_canvas_tools;
+            printf("tools %i\n", hide_canvas_tools);
+        }
+
+        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Frames"))
         {
             hide_sidepanel2 = !hide_sidepanel2;
-            printf("panel tog %i\n", hide_sidepanel);
+            printf("panel tog %i\n", hide_sidepanel2);
         }
 
         if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
@@ -238,7 +286,7 @@ void draw_ui()
         slider_val += 0.1;
     }
 
-  if(!hide_sidepanel)
+    if(!hide_sidepanel)
     {
         // Rect panel_left = cut_left(&layout, 256);
         static int panel_width = 256;
@@ -298,22 +346,22 @@ void draw_ui()
         end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
-    if(!hide_sidepanel2)
+        if(!hide_sidepanel2)
     {
         // Rect panel_left = cut_left(&layout, 256);
 
-        // Rect panel_rect = cut_bottom(&layout, 256);
-        static int panel_height = 256;
-        static int resize_start = 0;
+        Rect panel_rect = cut_bottom(&layout, 116);
+        // static int panel_height = 256;
+        // static int resize_start = 0;
         // i want to resize from the top of this panel. its panel_rect cuts from the bottom
-        Rect panel_rect = resizable_panel(rectcut(&layout, RectCut_Bottom), &panel_height, &hide_sidepanel2);
+        // Rect panel_rect = resizable_panel(rectcut(&layout, RectCut_Bottom), &panel_height, &hide_sidepanel2);
         // Rect temp = panel_rect;
 
         ui_core.draw_rect(panel_rect, ui_core.theme.panel_color);
 
         static float scroll_y = 0;
         static float scroll_x = 0;
-        begin_scroll_area(&scroll_x, &scroll_y, &panel_rect);
+        begin_scroll_area(&scroll_x, NULL, &panel_rect);
 
         // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
         // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
@@ -322,7 +370,12 @@ void draw_ui()
         // panel_rect = cut_top(&panel_rect, 32);
         for(int i = 0; i < 16; i++)
         {
-            ui_core.button(rectcut(&panel_rect, RectCut_Left), "test button");
+            Rect square = cut_left(&panel_rect, 100);
+            ui_core.button_rect(square);
+            ui_core.draw_box(square, {255,255,0,255});
+            ui_core.label_rect(square, "frame %i", i);
+            // ui_core.label_rect()
+            // ui_core.button(rectcut(&panel_rect, RectCut_Left), "test button");
         }
         
 
@@ -345,49 +398,117 @@ void draw_ui()
         // ui_core.draw_rect(panel_rect,{255,255,0,255});
 
 
-        end_scroll_area(&scroll_x, &scroll_y, &panel_rect);
+        end_scroll_area(&scroll_x, NULL, &panel_rect);
 
     }
 
+    static Color color_pick1 = {0, 0, 0, 255}; // black color default
+    static float zoom_slider_val = 1;
+    
+    if(!hide_canvas_tools)
     {
+        static int canvas_tools_width = 256;
+        // static int resize_start = 0;
+        Rect panel_left = resizable_panel(rectcut(&layout, RectCut_Left), &canvas_tools_width, &hide_canvas_tools);
+        // Rect panel_left = cut_left(&layout, 256);
+        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
+        
         static float scroll_y = 0;
-        // static float scroll_x = 0;
-        begin_scroll_area(NULL, &scroll_y, &layout);
 
-        // ui_core.draw_string("left over space... example main content...", {layout.x, layout.y}, ui_core.theme.text_color);
-        for(int i = 0; i < 32; i++)
+        // Rect scrollbar_rect = get_right(&panel_left, 16);
+
+
+        // panel_left.y += scroll_y*-1;
+
+        // overflow = true;
+        begin_scroll_area(NULL, &scroll_y, &panel_left);
+
+        // Rect panel_row = cut_top(&panel_left, 32);
+        // ui_core.label(rectcut(&panel_row, RectCut_Left), "zoom");
+
+        if(labeled_slider(&panel_left, "zoom", &zoom_slider_val, 1, 5))
         {
-            Rect row_rect = cut_top(&layout, 18);
-            ui_core.label(rectcut(&row_rect, RectCut_Left), "test label %i", i);
+            printf("slider changed %f\n", zoom_slider_val);
         }
 
-        end_scroll_area(NULL, &scroll_y, &layout);
+        static float brush_size = 1;
+        if(labeled_slider(&panel_left, "brush size", &brush_size, 1, 5))
+        {
+            printf("slider changed %f\n", brush_size);
+        }
+
+        color_picker_sliders(&panel_left, &color_pick1, "Color 1");
+
+
+        end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
-    // // render last so its above everything
-    // static const char* options[] = {"Open", "Save", "idk"};
-    // static int selected_index = 0;
-    // static bool combo_open = false;
+    // main content area
+    {
+        static float scroll_y = 0;
+        static float scroll_x = 0;
+        begin_scroll_area(&scroll_x, &scroll_y, &layout);
 
-    // if (ui_core.combo_box(rectcut(&toolbar, RectCut_Left), "Combo Box", options, 3, selected_index, combo_open)) {
-    //     printf("Selected option changed to: %s\n", options[selected_index]);
-    // }
+        // Center the canvas_rect inside the layout rect
+        Rect canvas_rect = {
+            layout.x + (layout.w - canvas_width) / 2,
+            layout.y + (layout.h - canvas_height) / 2,
+            canvas_width,
+            canvas_height
+        };
 
+        printf("mouse %i %i\n", ui_core.mouse_pos.x, ui_core.mouse_pos.y);
+        printf("mouse down %i\n", ui_core.mouse_down); // boolean
 
-    // if(!hide_toolbar)
-    // {
+        // Get the relative mouse position inside the canvas_rect
+        static int last_mouse_x = -1, last_mouse_y = -1;
+        int relative_mouse_x = ui_core.mouse_pos.x - canvas_rect.x;
+        int relative_mouse_y = ui_core.mouse_pos.y - canvas_rect.y;
 
-    //     if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Panel"))
-    //     {
-    //         hide_sidepanel2 = !hide_sidepanel2;
-    //         printf("panel tog %i\n", hide_sidepanel);
-    //     }
+        printf("relative mouse inside canvas %i %i\n", relative_mouse_x, relative_mouse_y);
 
-    //     if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
-    //     {
-    //         printf("button 2\n");
-    //     }
-    // }
+        // Check if the mouse is inside the canvas and if the mouse button is down
+        if (relative_mouse_x >= 0 && relative_mouse_x < canvas_width &&
+            relative_mouse_y >= 0 && relative_mouse_y < canvas_height &&
+            ui_core.mouse_down) {
+            
+            // Draw a line between the last and current mouse positions
+            if (last_mouse_x != -1 && last_mouse_y != -1) {
+                draw_line(bitmap, canvas_width, canvas_height, last_mouse_x, last_mouse_y, relative_mouse_x, relative_mouse_y, color_pick1); // Red line
+            }
+
+            // Update the last mouse position
+            last_mouse_x = relative_mouse_x;
+            last_mouse_y = relative_mouse_y;
+        } else {
+            // Reset the last mouse position when the mouse button is released
+            last_mouse_x = -1;
+            last_mouse_y = -1;
+        }
+
+        // Render the bitmap as a grid of rectangles
+        for (int y = 0; y < canvas_height; y++) {
+            for (int x = 0; x < canvas_width; x++) {
+                int pixel_index = y * canvas_width + x;
+                Rect pixel_rect = {
+                    canvas_rect.x + x,
+                    canvas_rect.y + y,
+                    1, 1
+                };
+                ui_core.draw_rect(pixel_rect, bitmap[pixel_index]);
+            }
+        }
+
+        // Rect canvas_edit_bar = add_top(&layout, 40);
+        // Rect canvas_edit_bar2 = add_top(&canvas_edit_bar, 40);
+        // ui_core.draw_box(canvas_edit_bar2, {255,255,0,255});
+
+        // Rect zoom_rect = cut_left(&layout, 256);
+        // static float zoom_slider_val = 0;
+        // ui_core.slider_rect(zoom_rect, &zoom_slider_val, 0, 100);
+
+        end_scroll_area(&scroll_x, &scroll_y, &layout);
+    }
 
     ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
     ui_core.slider_rect(bottombar, &slider_val, 0, 32);
@@ -443,6 +564,10 @@ int main()
         sdl2_get_text_width,
         sdl2_render_clip,
     };
+
+    for (int i = 0; i < canvas_width * canvas_height; ++i) {
+        bitmap[i] = {255, 255, 255, 255}; // White color
+    }
 
     ui_core.init(renderer);
 
