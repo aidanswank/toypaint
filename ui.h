@@ -12,11 +12,6 @@ void print_rect(Rect rect)
     printf("x%i y%i w%i h%i\n", rect.x, rect.y, rect.w, rect.h);
 }
 
-// struct LayoutItem {
-//     Rect rect;
-//     bool overflow_x;
-//     bool overflow_y;
-// };
 struct Color { unsigned char r, g, b, a; };
 
 // https://web.archive.org/web/20210306102303/https://halt.software/dead-simple-layouts/
@@ -34,28 +29,72 @@ typedef struct {
     RectCutSide side;
 } RectCut;
 
+// Rect cut_left(Rect* rect, int a) {
+//     int x = rect->x;
+//     int w = std::min(a, rect->w);
+//     rect->x += w;
+//     rect->w -= w;
+//     return {x, rect->y, w, rect->h};
+// }
+
+// Rect cut_right(Rect* rect, int a) {
+//     // int w = std::min(a, rect->w);
+//     int w = a;
+//     rect->w -= w;
+//     return {rect->x + rect->w, rect->y, w, rect->h};
+// }
+
+static bool overflow_vert = false;
+static bool overflow_horz = false;
+
 Rect cut_left(Rect* rect, int a) {
     int x = rect->x;
-    int w = std::min(a, rect->w);
+    int w;
+    
+    if(overflow_horz) {
+        w = a;
+    } else {
+        w = std::min(a, rect->w);
+    }
+    
     rect->x += w;
     rect->w -= w;
     return {x, rect->y, w, rect->h};
 }
 
+// Rect cut_right(Rect* rect, int a) {
+//     int w;
+    
+//     if(overflow_horz) {
+//         w = a;
+//     } else {
+//         w = std::min(a, rect->w);
+//     }
+    
+//     rect->w -= w;
+//     return {rect->x + rect->w, rect->y, w, rect->h};
+// }
+
 Rect cut_right(Rect* rect, int a) {
-    // int w = std::min(a, rect->w);
-    int w = a;
+    int w;
+    
+    if(overflow_horz) {
+        w = a;
+        // Allow width to become negative if content exceeds visible area
+        // rect->w -= w;
+    } else {
+        w = std::min(a, rect->w);
+    }
     rect->w -= w;
+    
     return {rect->x + rect->w, rect->y, w, rect->h};
 }
-
-static bool overflow = false;
 
 Rect cut_top(Rect* rect, int a) {
     int y = rect->y;
     int h;
     
-    if(overflow)
+    if(overflow_vert)
     {
         h = a;
     } else {
@@ -72,6 +111,34 @@ Rect cut_bottom(Rect* rect, int a) {
     rect->h -= h;
     return {rect->x, rect->y + rect->h, rect->w, h};
 }
+
+Rect cut_corner(Rect* rect, int width, int height) {
+    int w, h;
+    int original_x = rect->x;
+    int original_y = rect->y;
+
+    // Handle horizontal cutting
+    if (overflow_horz) {
+        w = width;
+    } else {
+        w = std::min(width, rect->w);
+    }
+    rect->x += w;
+    rect->w -= w;
+
+    // Handle vertical cutting
+    if (overflow_vert) {
+        h = height;
+    } else {
+        h = std::min(height, rect->h);
+    }
+    rect->y += h;
+    rect->h -= h;
+
+    // Return the cut corner rectangle
+    return {original_x, original_y, w, h};
+}
+
 
 // Get functions - same as cut, but keep input rect intact
 Rect get_left(const Rect* rect, int a) {
@@ -136,7 +203,7 @@ struct UITheme
     Color text_color = {255,255,255,255};
     Color panel_color = {27,27,28,255};
     Color label_bg_color = {180,24,20,255};
-    Color slider_handle_color = {82,65,90,124};
+    Color slider_handle_color = {82,65,90,180};
     Color slider_color = {255,255,255,14};
     int padding = 8;
 };
@@ -256,7 +323,7 @@ struct UICore
     void new_frame()
     {
 
-        overflow = false;
+        overflow_vert = false;
         // reset counts
         id_counter = 1;
         hover = next_hover;
@@ -375,14 +442,32 @@ struct UICore
         return clicked;
     }
 
-    void label(RectCut layout, const char* label)
+    // void label(RectCut layout, const char* label)
+    // {
+    //     float size = get_text_width(label) + (theme.padding*2);
+    //     float text_height = get_text_height(label);
+    //     // Rect rect = cut_left(layout, size);
+    //     Rect rect = rectcut_cut(layout, size);
+
+    //     // draw_box(rect, {255,0,255,255});
+        
+    //     // bool clicked = button_rect(rect);
+    //     draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
+    // }
+
+    void label(RectCut layout, const char* format, ...)
     {
-        float size = get_text_width(label) + (theme.padding*2);
+        char label[256];
+        va_list args;
+        va_start(args, format);
+        vsprintf(label, format, args);
+        va_end(args);
+
+        float size = get_text_width(label) + (theme.padding * 2);
         float text_height = get_text_height(label);
-        // Rect rect = cut_left(layout, size);
         Rect rect = rectcut_cut(layout, size);
 
-        // draw_box(rect, {255,0,255,255});
+        // draw_box(rect, {255, 0, 255, 255});
         
         // bool clicked = button_rect(rect);
         draw_string(label, {rect.x + theme.padding, rect.y + int(rect.h/2) - int(text_height/2)}, theme.text_color);
@@ -493,59 +578,192 @@ struct UICore
 
 static UICore ui_core;
 
-Rect resizable_panel(Rect* layout, int default_width, bool* hide_sidepanel) {
-    static int panel_width = default_width;
+// Rect resizable_panel(Rect* layout, int default_width, bool* hide_sidepanel) {
+//     static int panel_width = default_width;
+//     static bool is_resizing = false;
+//     static int resize_start_x = 0;
+
+//     if (*hide_sidepanel) {
+//         return Rect{0, 0, 0, 0}; // Return empty rect if panel is hidden
+//     }
+
+//     Rect panel_left = cut_left(layout, panel_width);
+
+//     // resize panel right
+//     Rect resize_handle = cut_right(&panel_left, 8); // 4 pixels wide resize handle
+
+//     // Rect resize_handle = cut_top(&panel_left, 8); // 4 pixels wide resize handle
+
+//     int id = ui_core.next_id();
+
+//     ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+
+//     if (ui_core.region_hit(resize_handle)) {
+//         ui_core.next_hover = id;
+//         ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+//         if (!is_resizing) {
+//             resize_start_x = ui_core.mouse_pos.x;
+//             is_resizing = true;
+//             ui_core.draw_rect(resize_handle, {0, 100, 0, 255}); 
+//         }
+//     }
+
+//     if (ui_core.active == id && is_resizing) {
+//         ui_core.next_hover = id;
+//         int delta = ui_core.mouse_pos.x - resize_start_x;
+//         panel_width = std::max(panel_width + delta, 100); // Minimum width of 100
+//         resize_start_x = ui_core.mouse_pos.x;
+
+//         // Adjust layout width
+//         layout->x += delta;
+//         layout->w -= delta;
+//     }
+
+//     if (!ui_core.mouse_down) {
+//         is_resizing = false;
+//     }
+
+//     // Draw resize handle
+
+//     return panel_left;
+// }
+
+// Rect resizable_panel(RectCut layout, int* panel_size, int* resize_start, bool* hide_sidepanel) {
+//     // static int panel_size = default_width;
+//     static bool is_resizing = false;
+//     // static int resize_start = 0;
+//     // static int resize_start_y = 0;
+
+//     if (*hide_sidepanel) {
+//         return Rect{0, 0, 0, 0}; // Return empty rect if panel is hidden
+//     }
+
+//     // Rect panel_left = cut_left(layout, panel_size);
+//     Rect panel_left = rectcut_cut(layout, *panel_size);
+
+//     // printf("cuttype %i panel_size %i\n", layout.side, *panel_size);
+//     printf("cuttype %i panel_size %i resize_start %i\n", layout.side, *panel_size, *resize_start);
+
+//     // resize panel right
+//     // Rect resize_handle = cut_right(&panel_left, 8); // 4 pixels wide resize handle
+//     Rect resize_handle = rectcut_cut(layout, 8);
+
+//     // Rect resize_handle = cut_top(&panel_left, 8); // 4 pixels wide resize handle
+
+//     UIId id = ui_core.next_id();
+
+//     ui_core.draw_rect(resize_handle, {150, 100, 100, 255}); 
+
+//     if (ui_core.region_hit(resize_handle)) {
+//         ui_core.next_hover = id;
+//         ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+//         // printf("hey %i\n", is_resizing);
+//         if (!is_resizing) {
+//             *resize_start = ui_core.mouse_pos.x;
+//             is_resizing = true;
+//             ui_core.draw_rect(resize_handle, {0, 100, 0, 255}); 
+//         }
+//     }
+
+//     if (ui_core.active == id && is_resizing) {
+//         ui_core.next_hover = id;
+
+//         if(layout.side == RectCut_Left)
+//         {
+//             int delta = ui_core.mouse_pos.x - *resize_start;
+//             *panel_size = std::max(*panel_size + delta, 100); // Minimum width of 100
+//             *resize_start = ui_core.mouse_pos.x;
+//             // printf("RectCut_Left %i resize start %i\n", layout.side, *resize_start);
+//         }
+
+//         if(layout.side == RectCut_Bottom)
+//         {
+//             int delta = ui_core.mouse_pos.y - *resize_start;
+//             *panel_size = std::max(*panel_size - delta, 100); // Minimum width of 100
+//             *resize_start = ui_core.mouse_pos.y;
+//             // printf("RectCut_Bottom %i resize start %i\n", layout.side, *resize_start);
+//         }
+
+//         // // // Adjust layout width
+//         // layout.rect->x += delta;
+//         // layout.rect->w -= delta;
+//     }
+
+//     if (!ui_core.mouse_down) {
+//         is_resizing = false;
+//     }
+
+//     // Draw resize handle
+
+//     return panel_left;
+// }
+
+Rect resizable_panel(RectCut layout, int* panel_size, bool* hide_sidepanel) {
     static bool is_resizing = false;
-    static int resize_start_x = 0;
+    static int last_mouse_pos = 0;
 
     if (*hide_sidepanel) {
         return Rect{0, 0, 0, 0}; // Return empty rect if panel is hidden
     }
 
-    Rect panel_left = cut_left(layout, panel_width);
-    Rect resize_handle = add_right(&panel_left, 8); // 4 pixels wide resize handle
+    Rect panel_left = rectcut_cut(layout, *panel_size);
 
-    int id = ui_core.next_id();
+    // Print debug info
+    // printf("cuttype %i panel_size %i\n", layout.side, *panel_size);
 
-    ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+    // Create resize handle
+    Rect resize_handle = rectcut_cut(layout, 8);
+
+    UIId id = ui_core.next_id();
+
+    // Draw the resize handle
+    ui_core.draw_rect(resize_handle, {100, 100, 100, 255});
 
     if (ui_core.region_hit(resize_handle)) {
         ui_core.next_hover = id;
-        ui_core.draw_rect(resize_handle, {100, 100, 100, 255}); 
+        // ui_core.draw_rect(resize_handle, {100, 0, 100, 255});
+
         if (!is_resizing) {
-            resize_start_x = ui_core.mouse_pos.x;
+            last_mouse_pos = (layout.side == RectCut_Left) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
             is_resizing = true;
-            ui_core.draw_rect(resize_handle, {0, 100, 0, 255}); 
+            // ui_core.draw_rect(resize_handle, {180, 180, 180, 255});
+            ui_core.draw_box(resize_handle, {180, 180, 180, 255});
         }
     }
 
     if (ui_core.active == id && is_resizing) {
         ui_core.next_hover = id;
-        int delta = ui_core.mouse_pos.x - resize_start_x;
-        panel_width = std::max(panel_width + delta, 100); // Minimum width of 100
-        resize_start_x = ui_core.mouse_pos.x;
 
-        // Adjust layout width
-        layout->x += delta;
-        layout->w -= delta;
+        int current_mouse_pos = (layout.side == RectCut_Left) ? ui_core.mouse_pos.x : ui_core.mouse_pos.y;
+        int delta = current_mouse_pos - last_mouse_pos;
+
+        if (layout.side == RectCut_Left) {
+            *panel_size = std::max(*panel_size + delta, 100); // Minimum width of 100
+        } else if (layout.side == (RectCut_Bottom)) {
+            *panel_size = std::max(*panel_size - delta, 100); // Minimum height of 100
+        } else if (layout.side == (RectCut_Top)) {
+            *panel_size = std::max(*panel_size + delta, 100); // Minimum height of 100
+        }
+
+        last_mouse_pos = current_mouse_pos;
     }
 
     if (!ui_core.mouse_down) {
         is_resizing = false;
     }
 
-    // Draw resize handle
-
     return panel_left;
 }
 
-static Rect scrollbar_rect = {0,0,0,0};
 
-void begin_scroll_area(float *scroll_y, Rect* area)
+static Rect scrollbar_vert_rect = {0,0,0,0};
+static Rect scrollbar_horz_rect = {0,0,0,0};
+
+void begin_scroll_area(float *scroll_x, float *scroll_y, Rect* area)
 {
-    float scroll_speed = 7.5; // Adjust this to control scroll speed
-    float lerp_factor = 0.2f; // Adjust for smoother/more responsive scrolling
-    float friction = 0.9; // Adjust for faster/slower deceleration
+    float scroll_speed = 5.5; // Adjust this to control scroll speed
+    float lerp_factor = 0.9f; // Adjust for smoother/more responsive scrolling
+    float friction = 0.7; // Adjust for faster/slower deceleration
 
     // Convert raw input to target scroll delta
     if (std::abs(ui_core.scroll_input) > 0)
@@ -575,10 +793,20 @@ void begin_scroll_area(float *scroll_y, Rect* area)
         
 
     ui_core.renderer.render_clip(ui_core.renderer.userdata, area);
-    overflow = true;
-    scrollbar_rect = cut_right(area, 18);
-    // Rect resize_handle = add_right(&scrollbar_rect, 18);
+    if(scroll_y)
+    {
+        overflow_vert = true;
+        scrollbar_vert_rect = cut_right(area, 18);
+    }
 
+    if(scroll_x)
+    {
+        overflow_horz = true;
+        scrollbar_horz_rect = cut_bottom(area, 18);
+    }
+    // Rect resize_handle = add_right(&scrollbar_vert_rect, 18);
+
+    // finger drag scroll
     if(ui_core.region_hit(*area))
     {
         // printf("yo\n");
@@ -589,55 +817,68 @@ void begin_scroll_area(float *scroll_y, Rect* area)
         *scroll_y -= ui_core.scroll_delta;
     }
 
-    // int id = ui_core.next_id();
-    // if(ui_core.region_hit(resize_handle))
-    // {
+    if(scroll_y)
+    {
+        area->y += *scroll_y *- 1;
+    }
 
-    //     ui_core.next_hover = id;
-    //     // area->x //
-    //     ui_core.draw_box(*area,{0,0,255,255});
-    // }
-
-    // if(ui_core.active == id)
-    // {
-    //     ui_core.next_hover = id;
-    //     printf("drag me %i\n", ui_core.mouse_pos.x);
-
-    //     // do something with *area
-    //     ui_core.draw_box(resize_handle,{255,255,255,255});
-    //     ui_core.draw_box(*area,{0,0,255,255});
-    // }
-
-
-    // printf("%f\n", *scroll_y);
-
-    // *scroll_y = std::abs(*scroll_y);
-
-    area->y += *scroll_y *- 1;
+    if(scroll_x)
+    {
+        area->x += *scroll_x *- 1;
+    }
 }
 
-void end_scroll_area(float *scroll_y, Rect* area) {
-    int scrollmax = 0;
+void end_scroll_area(float *scroll_x, float *scroll_y, Rect* area) {
+    int scrollmax_vert = 0;
+    // printf("area->h %i\n", area->h);
     if(area->h < 0)
     {
-        scrollmax = area->h * -1;
+        scrollmax_vert = area->h * -1;
         
         // Calculate the target scroll position
-        float target_scroll = std::min(std::max(*scroll_y, 0.0f), (float)scrollmax);
+        float target_scroll = std::min(std::max(*scroll_y, 0.0f), (float)scrollmax_vert);
         
         // Lerp the scroll position
         float lerp_factor = 0.1f; // Adjust this value to control the speed of the lerp
         *scroll_y = *scroll_y + (target_scroll - *scroll_y) * lerp_factor;
         
         // print_rect(*area);
-        ui_core.vslider_rect(scrollbar_rect, *scroll_y, 0, scrollmax);
+        ui_core.vslider_rect(scrollbar_vert_rect, *scroll_y, 0, scrollmax_vert);
     } else {
         // If there's no scrolling needed, lerp back to 0
         float lerp_factor = 0.1f;
         *scroll_y = *scroll_y + (0 - *scroll_y) * lerp_factor;
     }
 
+    if(scroll_x)
+    {
+        // printf("area->w %i\n", area->w);
+        // print_rect(*area);
+        int scrollmax_horz = 0;
+        if(area->w < 0)
+        {
+            scrollmax_horz = (area->w * -1);
+            
+            // Calculate the target scroll position
+            float target_scroll = std::min(std::max(*scroll_x, 0.0f), (float)scrollmax_horz);
+            
+            // Lerp the scroll position
+            float lerp_factor = 0.1f; // Adjust this value to control the speed of the lerp
+            // *scroll_x = *scroll_x + (target_scroll - *scroll_x) * lerp_factor;
+            *scroll_x = target_scroll;
+
+            // print_rect(*area);
+            ui_core.slider_rect(scrollbar_horz_rect, scroll_x, 0, scrollmax_horz);
+        } else {
+            // If there's no scrolling needed, lerp back to 0
+            // float lerp_factor = 0.1f;
+            // *scroll_x = *scroll_x + (0 - *scroll_x) * lerp_factor;
+            *scroll_x = 0;
+        }
+    }
+
     ui_core.renderer.render_clip(ui_core.renderer.userdata, NULL);
-    overflow = false;
+    overflow_vert = false;
+    overflow_horz = false;
     ui_core.scroll_delta = 0;
 }

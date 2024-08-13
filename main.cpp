@@ -175,20 +175,60 @@ void draw_ui()
     // ui_core.draw_rect(layout,{0,0,0,255});
 
     // Cut the top for the toolbar
-    Rect toolbar = cut_top(&layout, 32);
-
-    ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
-
+    static bool hide_toolbar = false;
+    static bool is_playing = false;
     static bool hide_sidepanel = false;
     static bool hide_sidepanel2 = false;
 
-
-    static bool is_playing = false;
-    if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Play"))
+    if(!hide_toolbar)
     {
-        is_playing = !is_playing;
-        printf("button 3\n");
+        Rect toolbar = cut_top(&layout, 32);
+
+        ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
+
+        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Theme"))
+        {
+            hide_sidepanel = !hide_sidepanel;
+            printf("button 1 %i\n", hide_sidepanel);
+        }
+
+        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Console"))
+        {
+            hide_sidepanel2 = !hide_sidepanel2;
+            printf("panel tog %i\n", hide_sidepanel);
+        }
+
+        if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
+        {
+            printf("button 2\n");
+        }
+
+        if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Play"))
+        {
+            is_playing = !is_playing;
+            printf("button 3\n");
+        }
+
+        // if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Hide"))
+        // {
+        //     hide_toolbar = !hide_toolbar;
+        //     printf("hide toolbar\n");
+        // }
     }
+    // Rect toolbar = cut_top(&layout, 32);
+
+    // ui_core.draw_rect(toolbar, ui_core.theme.panel_color);
+
+    // static bool hide_sidepanel = false;
+    // static bool hide_sidepanel2 = false;
+
+
+    // static bool is_playing = false;
+    // if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Play"))
+    // {
+    //     is_playing = !is_playing;
+    //     printf("button 3\n");
+    // }
 
     Rect bottombar = cut_bottom(&layout, 32);
 
@@ -201,7 +241,9 @@ void draw_ui()
   if(!hide_sidepanel)
     {
         // Rect panel_left = cut_left(&layout, 256);
-        Rect panel_left = resizable_panel(&layout, 256, &hide_sidepanel);
+        static int panel_width = 256;
+        static int resize_start = 0;
+        Rect panel_left = resizable_panel(rectcut(&layout, RectCut_Left), &panel_width, &hide_sidepanel);
         ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
         
         static float scroll_y = 0;
@@ -212,7 +254,7 @@ void draw_ui()
         // panel_left.y += scroll_y*-1;
 
         // overflow = true;
-        begin_scroll_area(&scroll_y, &panel_left);
+        begin_scroll_area(NULL, &scroll_y, &panel_left);
 
         Rect panel_column = cut_top(&panel_left, 32);
         ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
@@ -232,7 +274,7 @@ void draw_ui()
         color_picker_sliders(&panel_left, &ui_core.theme.button_color, "button color");
         color_picker_sliders(&panel_left, &ui_core.theme.panel_color, "panel color");
         color_picker_sliders(&panel_left, &ui_core.theme.slider_handle_color, "slider handle color");
-        color_picker_sliders(&panel_left, &ui_core.theme.slider_color, "slider  color");
+        color_picker_sliders(&panel_left, &ui_core.theme.slider_color, "slider color");
         color_picker_sliders(&panel_left, &ui_core.theme.hot_color, "hot color");
 
         // // print_rect(panel_left);
@@ -253,42 +295,73 @@ void draw_ui()
         //     // cut_left(&panel_left,16);
 
         // overflow = false;
-        end_scroll_area(&scroll_y, &panel_left);
+        end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
     if(!hide_sidepanel2)
     {
         // Rect panel_left = cut_left(&layout, 256);
 
-        Rect panel_left = cut_bottom(&layout, 256);
-        // Rect temp = panel_left;
+        // Rect panel_rect = cut_bottom(&layout, 256);
+        static int panel_height = 256;
+        static int resize_start = 0;
+        // i want to resize from the top of this panel. its panel_rect cuts from the bottom
+        Rect panel_rect = resizable_panel(rectcut(&layout, RectCut_Bottom), &panel_height, &hide_sidepanel2);
+        // Rect temp = panel_rect;
 
-        ui_core.draw_rect(panel_left, ui_core.theme.panel_color);
+        ui_core.draw_rect(panel_rect, ui_core.theme.panel_color);
 
         static float scroll_y = 0;
-        begin_scroll_area(&scroll_y, &panel_left);
+        static float scroll_x = 0;
+        begin_scroll_area(&scroll_x, &scroll_y, &panel_rect);
 
-        Rect panel_column = cut_top(&panel_left, 32);
-        ui_core.label(rectcut(&panel_column, RectCut_Left), "Label 1");
+        // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
+        // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
 
-        color_picker_sliders(&panel_left, &ui_core.theme.hot_color, "hot color");
-
-        for(int i=0; i<20; i++)
+        // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
+        // panel_rect = cut_top(&panel_rect, 32);
+        for(int i = 0; i < 16; i++)
         {
-            panel_column = cut_top(&panel_left, 32);
-            ui_core.button(rectcut(&panel_column, RectCut_Left), "test button");
+            ui_core.button(rectcut(&panel_rect, RectCut_Left), "test button");
         }
+        
 
-        end_scroll_area(&scroll_y, &panel_left);
+        // ui_core.draw_box(panel_rect,{255,255,0,255});
+
+
+
+        // // color_picker_sliders(&panel_rect, &ui_core.theme.hot_color, "hot color");
+        // panel_rect = cut_top(&panel_rect, 32);
+        // for(int i=0; i<8; i++)
+        // {
+        //     // panel_column = cut_left(&panel_rect, 32);
+        //     ui_core.button(rectcut(&panel_rect, RectCut_Left), "test button");
+        //     // ui_core.button_rect(panel_column);
+        // }
+
+        // panel_rect = panel_row;
+
+        // cut_top(&panel_rect, 32);
+        // ui_core.draw_rect(panel_rect,{255,255,0,255});
+
+
+        end_scroll_area(&scroll_x, &scroll_y, &panel_rect);
 
     }
 
-    ui_core.draw_string("left over space... example main content...", {layout.x, layout.y}, ui_core.theme.text_color);
-
-    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Theme"))
     {
-        hide_sidepanel = !hide_sidepanel;
-        printf("button 1 %i\n", hide_sidepanel);
+        static float scroll_y = 0;
+        // static float scroll_x = 0;
+        begin_scroll_area(NULL, &scroll_y, &layout);
+
+        // ui_core.draw_string("left over space... example main content...", {layout.x, layout.y}, ui_core.theme.text_color);
+        for(int i = 0; i < 32; i++)
+        {
+            Rect row_rect = cut_top(&layout, 18);
+            ui_core.label(rectcut(&row_rect, RectCut_Left), "test label %i", i);
+        }
+
+        end_scroll_area(NULL, &scroll_y, &layout);
     }
 
     // // render last so its above everything
@@ -300,16 +373,21 @@ void draw_ui()
     //     printf("Selected option changed to: %s\n", options[selected_index]);
     // }
 
-    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
-    {
-        printf("button 2\n");
-    }
 
-    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Panel"))
-    {
-        hide_sidepanel2 = !hide_sidepanel2;
-        printf("panel tog %i\n", hide_sidepanel);
-    }
+    // if(!hide_toolbar)
+    // {
+
+    //     if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Panel"))
+    //     {
+    //         hide_sidepanel2 = !hide_sidepanel2;
+    //         printf("panel tog %i\n", hide_sidepanel);
+    //     }
+
+    //     if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Edit"))
+    //     {
+    //         printf("button 2\n");
+    //     }
+    // }
 
     ui_core.button(rectcut(&bottombar, RectCut_Right), "Example");
     ui_core.slider_rect(bottombar, &slider_val, 0, 32);
