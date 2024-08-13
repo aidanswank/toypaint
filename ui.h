@@ -197,7 +197,7 @@ Rect rectcut_cut(RectCut rectcut, int a) {
 
 struct UITheme
 {
-	Color button_color = {111,105,129,220};
+	Color button_color = {111,105,129,0};
     Color hot_color = {255,255,255,100};
     Color flash_color = {255,255,255,180};
     Color text_color = {255,255,255,255};

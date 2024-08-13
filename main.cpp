@@ -180,6 +180,8 @@ struct AppState
     // Set the width and height of the canvas
     int canvas_width = 320;
     int canvas_height = 240;
+    Color color_pick1 = {0, 0, 0, 255}; // black color default
+    float zoom_slider_val = 1;
 
     Color bitmap[320*240];
 };
@@ -221,11 +223,63 @@ AppState* deserialize_app_state(const char* filename) {
 
 static AppState app_state;
 
+#include <vector>
+#include <string>
+
+// A vector to hold the history of serialized states
+std::vector<std::string> undo_stack;
+int undo_index = -1; // Current index in the undo stack
+
+// Serialize the current state and push it onto the stack
+void push_undo_state() {
+    std::string filename = "undo_state_" + std::to_string(undo_stack.size()) + ".bin";
+    if (serialize_app_state(&app_state, filename.c_str())) {
+        // Remove states that are ahead of the current undo index
+        if (undo_index < static_cast<int>(undo_stack.size()) - 1) {
+            undo_stack.erase(undo_stack.begin() + undo_index + 1, undo_stack.end());
+        }
+        undo_stack.push_back(filename);
+        undo_index = undo_stack.size() - 1;
+    }
+}
+
+// Undo: Load the previous state
+void undo() {
+    if (undo_index > 0) {
+        undo_index--;
+        AppState* state = deserialize_app_state(undo_stack[undo_index].c_str());
+        if (state) {
+            app_state = *state;
+            free(state);
+        }
+    }
+}
+
+// Redo: Load the next state
+void redo() {
+    if (undo_index < static_cast<int>(undo_stack.size()) - 1) {
+        undo_index++;
+        AppState* state = deserialize_app_state(undo_stack[undo_index].c_str());
+        if (state) {
+            app_state = *state;
+            free(state);
+        }
+    }
+}
+
 void app_init()
 {
     for (int i = 0; i < app_state.canvas_width * app_state.canvas_height; ++i) {
         app_state.bitmap[i] = {255, 255, 255, 255}; // White color
     }
+
+    push_undo_state();
+}
+
+// Call this after each stroke is finished
+void end_stroke() {
+    push_undo_state();
+    printf("end\n");
 }
 
 void draw_line(Color* bitmap, int canvas_width, int canvas_height, int x0, int y0, int x1, int y1, Color color) {
@@ -438,8 +492,8 @@ void draw_ui()
 
     }
 
-    static Color color_pick1 = {0, 0, 0, 255}; // black color default
-    static float zoom_slider_val = 1;
+    // static Color color_pick1 = {0, 0, 0, 255}; // black color default
+    // static float zoom_slider_val = 1;
 
     if(!hide_canvas_tools)
     {
@@ -462,10 +516,10 @@ void draw_ui()
         // Rect panel_row = cut_top(&panel_left, 32);
         // ui_core.label(rectcut(&panel_row, RectCut_Left), "zoom");
 
-        if(labeled_slider(&panel_left, "zoom", &zoom_slider_val, 1, 5))
+        if(labeled_slider(&panel_left, "zoom", &app_state.zoom_slider_val, 1, 5))
         {
-            printf("slider changed %f\n", zoom_slider_val);
-            zoom_slider_val = (int)zoom_slider_val;
+            printf("slider changed %f\n", app_state.zoom_slider_val);
+            app_state.zoom_slider_val = (int)app_state.zoom_slider_val;
         }
 
         static float brush_size = 1;
@@ -474,7 +528,7 @@ void draw_ui()
             printf("slider changed %f\n", brush_size);
         }
 
-        color_picker_sliders(&panel_left, &color_pick1, "Color 1");
+        color_picker_sliders(&panel_left, &app_state.color_pick1, "Color 1");
 
 
         end_scroll_area(NULL, &scroll_y, &panel_left);
@@ -487,8 +541,8 @@ void draw_ui()
     static bool is_drawing = false; // Flag to track if a stroke is in progress
     begin_scroll_area(&scroll_x, &scroll_y, &layout);
 
-    int zoomed_canvas_width = static_cast<int>(app_state.canvas_width * zoom_slider_val);
-    int zoomed_canvas_height = static_cast<int>(app_state.canvas_height * zoom_slider_val);
+    int zoomed_canvas_width = static_cast<int>(app_state.canvas_width * app_state.zoom_slider_val);
+    int zoomed_canvas_height = static_cast<int>(app_state.canvas_height * app_state.zoom_slider_val);
 
     Rect canvas_rect = {
         layout.x,
@@ -500,8 +554,8 @@ void draw_ui()
     cut_corner(&layout, zoomed_canvas_width, zoomed_canvas_height);
 
     static int last_mouse_x = -1, last_mouse_y = -1;
-    int relative_mouse_x = (ui_core.mouse_pos.x - canvas_rect.x) / zoom_slider_val;
-    int relative_mouse_y = (ui_core.mouse_pos.y - canvas_rect.y) / zoom_slider_val;
+    int relative_mouse_x = (ui_core.mouse_pos.x - canvas_rect.x) / app_state.zoom_slider_val;
+    int relative_mouse_y = (ui_core.mouse_pos.y - canvas_rect.y) / app_state.zoom_slider_val;
 
     if(ui_core.active == 0) // check if any other widget is NOT active
     {
@@ -518,7 +572,7 @@ void draw_ui()
             if (ui_core.mouse_down && is_drawing) {
                 // Stroke in progress
                 draw_line(app_state.bitmap, app_state.canvas_width, app_state.canvas_height, 
-                          last_mouse_x, last_mouse_y, relative_mouse_x, relative_mouse_y, color_pick1);
+                          last_mouse_x, last_mouse_y, relative_mouse_x, relative_mouse_y, app_state.color_pick1);
                 
                 last_mouse_x = relative_mouse_x;
                 last_mouse_y = relative_mouse_y;
@@ -530,7 +584,8 @@ void draw_ui()
             is_drawing = false;
             last_mouse_x = -1;
             last_mouse_y = -1;
-            printf("end\n");  // Print "end" when the stroke stops
+            // printf("end\n");  // Print "end" when the stroke stops
+            end_stroke();
         }
     }
 
@@ -539,10 +594,10 @@ void draw_ui()
         for (int x = 0; x < app_state.canvas_width; x++) {
             int pixel_index = y * app_state.canvas_width + x;
             Rect pixel_rect = {
-                canvas_rect.x + static_cast<int>(x * zoom_slider_val),
-                canvas_rect.y + static_cast<int>(y * zoom_slider_val),
-                static_cast<int>(zoom_slider_val),
-                static_cast<int>(zoom_slider_val)
+                canvas_rect.x + static_cast<int>(x * app_state.zoom_slider_val),
+                canvas_rect.y + static_cast<int>(y * app_state.zoom_slider_val),
+                static_cast<int>(app_state.zoom_slider_val),
+                static_cast<int>(app_state.zoom_slider_val)
             };
 
             ui_core.draw_rect(pixel_rect, app_state.bitmap[pixel_index]);
@@ -593,6 +648,17 @@ void draw_ui()
         }
     }
 
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Undo"))
+    {
+        undo();
+        printf("undo performed\n");
+    }
+
+    if(ui_core.button(rectcut(&toolbar, RectCut_Left), "Redo"))
+    {
+        redo();
+        printf("redo performed\n");
+    }
 
     if(ui_core.button(rectcut(&toolbar, RectCut_Right), "Settings"))
     {
