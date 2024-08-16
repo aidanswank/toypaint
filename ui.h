@@ -359,12 +359,35 @@ struct UICore
 
     }
 
+    // bool color_button_rect(Rect rect, Color color)
+    // {
+    //     UIId id = next_id();
+    //     draw_rect(rect, color);
+
+    //     if(region_hit(rect))
+    //     {
+    //         next_hover = id;
+    //     }
+
+    //     if(hover == id) // make lighter on hover
+    //     {
+    //         draw_rect(rect, theme.hot_color);
+    //     }
+
+    //     if(mouse_down_hover == id) // flash white on actual click
+    //     {
+    //         draw_rect(rect, theme.flash_color);
+    //     }
+
+    //     return (clicked == id);
+    // }
+
     bool button_rect(Rect rect)
     {
-        int id = next_id();
+        UIId id = next_id();
         draw_rect(rect, theme.button_color);
 
-        // if(active != 0) // 
+        // if(active != id) // 
         // {
         //     return 0;
         // }
@@ -552,7 +575,7 @@ struct UICore
         return (active == id && mouse_down);
     }
 
-    bool slider_rect(Rect rect, float *value, float min_value, float max_value) {
+    bool slider_rect(Rect rect, float *value, float min_value, float max_value, bool single_event = false) {
         int id = next_id();
         draw_rect(rect, theme.slider_color);
         
@@ -595,8 +618,12 @@ struct UICore
         // Draw the slider value
         draw_string(value_str, text_pos, theme.text_color);
         
-        // return (clicked == id); // if you want it to return just one event
-        return (active == id && mouse_down);
+        if(single_event)
+        {
+            return (clicked == id); // if you want it to return just one event
+        } else {
+            return (active == id && mouse_down);
+        }
     }
 };
 
