@@ -417,37 +417,53 @@ void set_pixel(Color* bitmap, int x, int y, Color color)
     bitmap[pixel_index] = color;
 }
 
-// #define MAX_DEPTH 10000
-#include <vector>
+#include <queue>
 
-void flood_fill(Color new_color, Color old_color, int x, int y, int depth = 0)
-{
-    if(!in_boundary(x, y))
-    {
+// Define a struct for the node
+struct Node {
+    int x, y;
+};
+
+// Use a queue for the iterative approach
+void flood_fill(Color new_color, Color old_color, int start_x, int start_y) {
+    if (!in_boundary(start_x, start_y)) {
         printf("not in boundary\n");
         return;
     }
 
-    Color pixel = get_pixel(app_state.bitmap, x, y);
-
-    if(equals_color(pixel, new_color))
-    {
-        // printf("same color\n");
+    Color start_pixel = get_pixel(app_state.bitmap, start_x, start_y);
+    if (!equals_color(start_pixel, old_color)) {
+        printf("start pixel does not match old_color\n");
         return;
     }
 
-    if (!equals_color(pixel, old_color))
-    {
-        // printf("color does not match old_color\n");
-        return;
+    // Initialize the queue
+    std::queue<Node> q;
+    q.push({start_x, start_y});
+
+    while (!q.empty()) {
+        Node n = q.front();
+        q.pop();
+
+        // Check if the current pixel is within the boundary and has the old color
+        if (!in_boundary(n.x, n.y)) {
+            continue;
+        }
+
+        Color pixel = get_pixel(app_state.bitmap, n.x, n.y);
+        if (!equals_color(pixel, old_color)) {
+            continue;
+        }
+
+        // Set the new color
+        set_pixel(app_state.bitmap, n.x, n.y, new_color);
+
+        // Add neighbors to the queue
+        q.push({n.x, n.y + 1}); // south
+        q.push({n.x + 1, n.y}); // east
+        q.push({n.x, n.y - 1}); // north
+        q.push({n.x - 1, n.y}); // west
     }
-
-    set_pixel(app_state.bitmap, x, y, new_color);
-
-    flood_fill(new_color, old_color, x, y+1, depth+1);
-    flood_fill(new_color, old_color, x+1, y, depth+1);
-    flood_fill(new_color, old_color, x, y-1, depth+1);
-    flood_fill(new_color, old_color, x-1, y, depth+1);
 }
 
 void draw_line(Color* bitmap, int canvas_width, int canvas_height, int x0, int y0, int x1, int y1, Color color) {
@@ -753,11 +769,11 @@ void draw_ui()
         //     push_undo_state();
         // }
 
-        Rect panel_row = cut_top(&panel_left, 32);
-        ui_core.label(rectcut(&panel_row, RectCut_Left), "Label");
+        // Rect panel_row = cut_top(&panel_left, 32);
+        // ui_core.label(rectcut(&panel_row, RectCut_Left), "Label");
 
-        Rect icon_square = cut_left(&panel_row, 32);
-        ui_core.button_rect(icon_square);
+        // Rect icon_square = cut_left(&panel_row, 32);
+        // ui_core.button_rect(icon_square);
 
 
         cut_top(&panel_left, 18); //new line
@@ -771,8 +787,8 @@ void draw_ui()
         end_scroll_area(NULL, &scroll_y, &panel_left);
     }
 
-    Rect rightside_toolbar = cut_right(&layout, 25*2);
-    ui_core.draw_rect(rightside_toolbar, ui_core.theme.panel_color);
+    Rect rightside_toolbar = cut_left(&layout, 25*2);
+    ui_core.draw_rect(rightside_toolbar, {150,150,150,255});
 
 
     Rect icon_square; 
